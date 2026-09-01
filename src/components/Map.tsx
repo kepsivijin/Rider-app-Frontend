@@ -8,9 +8,6 @@ import {
   SERVICE_LOCATIONS,
 } from '../constants/serviceArea';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const USE_GOOGLE_MAPS = GOOGLE_MAPS_API_KEY && !GOOGLE_MAPS_API_KEY.includes('your-') && GOOGLE_MAPS_API_KEY !== 'local-test-key';
-
 export interface MapClickEvent {
   latLng: { lat: () => number; lng: () => number };
 }
@@ -75,7 +72,6 @@ const LeafletMap: React.FC<MapProps> = ({ center, markers = [], onMapClick, trac
   if (dropoff) routeLine.push([dropoff.lat, dropoff.lng]);
 
   const driverLine = driverPath.map((p) => [p.lat, p.lng] as [number, number]);
-
   const areaMarkers = Object.values(SERVICE_LOCATIONS);
 
   return (
@@ -86,7 +82,7 @@ const LeafletMap: React.FC<MapProps> = ({ center, markers = [], onMapClick, trac
       scrollWheelZoom
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Kanyakumari'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <Rectangle
@@ -128,37 +124,6 @@ const LeafletMap: React.FC<MapProps> = ({ center, markers = [], onMapClick, trac
   );
 };
 
-const GoogleMapWrapper = React.lazy(async () => {
-  const { GoogleMap, Marker, useJsApiLoader } = await import('@react-google-maps/api');
-
-  const Component: React.FC<MapProps> = ({ center, markers = [], onMapClick }) => {
-    const { isLoaded, loadError } = useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_API_KEY });
-
-    if (loadError) {
-      return <LeafletMap center={center} markers={markers} onMapClick={onMapClick} />;
-    }
-    if (!isLoaded) {
-      return <div className="flex items-center justify-center h-full bg-gray-100">Loading map...</div>;
-    }
-
-    return (
-      <GoogleMap
-        mapContainerStyle={{ width: '100%', height: '100%' }}
-        center={center || SERVICE_AREA_CENTER}
-        zoom={13}
-        onClick={onMapClick as any}
-        options={{ zoomControl: true, streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
-      >
-        {markers.map((marker, index) => (
-          <Marker key={index} position={{ lat: marker.lat, lng: marker.lng }} label={marker.label} />
-        ))}
-      </GoogleMap>
-    );
-  };
-
-  return { default: Component };
-});
-
 const Map: React.FC<MapProps> = (props) => {
   useEffect(() => {
     delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -168,14 +133,6 @@ const Map: React.FC<MapProps> = (props) => {
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
     });
   }, []);
-
-  if (USE_GOOGLE_MAPS) {
-    return (
-      <React.Suspense fallback={<div className="flex items-center justify-center h-full bg-gray-100">Loading map...</div>}>
-        <GoogleMapWrapper {...props} />
-      </React.Suspense>
-    );
-  }
 
   return <LeafletMap {...props} />;
 };

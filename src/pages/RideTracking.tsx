@@ -17,6 +17,7 @@ const RideTracking: React.FC = () => {
   const navigate = useNavigate();
   const [ride, setRide] = useState<any>(null);
   const prevStatusRef = useRef<string | null>(null);
+  const notifiedOtpRef = useRef(false);
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
   const [driverPath, setDriverPath] = useState<Array<{ lat: number; lng: number }>>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +38,14 @@ const RideTracking: React.FC = () => {
       setLoading(false);
 
       if (prevStatusRef.current === 'requested' && next.status === 'accepted') {
-        toast.success(`Driver accepted! ${next.driver_name || 'Driver'} · ${next.driver_vehicle || ''}`);
+        toast.success(`Driver accepted! ${next.driver_name || 'Driver'} · ${next.driver_vehicle || ''}`, { duration: 5000 });
+      }
+      if (next.status === 'accepted' && next.pickup_otp && !notifiedOtpRef.current) {
+        notifiedOtpRef.current = true;
+        toast.success(`Pickup OTP: ${next.pickup_otp} — tell this to your driver`, { duration: 8000 });
+      }
+      if (next.notification_message) {
+        // Shown in banner below
       }
       if (prevStatusRef.current === 'accepted' && next.status === 'started') {
         toast.success('Ride started — heading to your destination');
@@ -107,7 +115,7 @@ const RideTracking: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 relative min-h-0">
+      <div className="flex-1 relative min-h-[45vh]">
         <Map
           center={mapCenter}
           markers={markers}
@@ -117,6 +125,20 @@ const RideTracking: React.FC = () => {
       </div>
 
       <div className="bg-white border-t shadow-lg p-4 max-h-[45vh] overflow-y-auto">
+        {ride.status === 'accepted' && ride.pickup_otp && !ride.pickup_verified && (
+          <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl">
+            <p className="text-sm font-semibold text-amber-900">🔔 Driver accepted — Pickup OTP</p>
+            <p className="text-3xl font-bold text-amber-700 tracking-widest my-2">{ride.pickup_otp}</p>
+            <p className="text-sm text-amber-800">Tell this code to your driver when they arrive. (Demo test code: 987653)</p>
+          </div>
+        )}
+
+        {ride.pickup_verified && ride.status === 'accepted' && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm font-medium">
+            ✓ Driver verified your OTP — ride will start soon
+          </div>
+        )}
+
         <RideStatusTimeline status={ride.status} />
 
         {ride.status === 'requested' && (
@@ -127,7 +149,7 @@ const RideTracking: React.FC = () => {
         )}
 
         {ride.driver_id && ride.status !== 'requested' && (
-          <div className="space-y-3">
+          <div className="space-y-3 mt-3">
             <div className="bg-gray-50 p-3 rounded-xl flex justify-between items-center">
               <div>
                 <p className="text-xs text-gray-500">Driver</p>

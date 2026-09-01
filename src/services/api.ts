@@ -47,6 +47,8 @@ export const rideAPI = {
   getRide: (rideId: string) => api.get(`/rides/${rideId}`),
   getMyRides: () => api.get('/rides/my-rides'),
   cancelRide: (rideId: string) => api.post(`/rides/${rideId}/cancel`),
+  verifyPickupOtp: (rideId: string, pickup_otp: string) =>
+    api.post(`/rides/${rideId}/verify-pickup`, { pickup_otp }),
 };
 
 export const userAPI = {
@@ -55,7 +57,8 @@ export const userAPI = {
 };
 
 export const ratingAPI = {
-  createRating: (data: any) => api.post('/ratings', data),
+  createRating: (data: { ride_id: string; to_user_id: string; rating: number; comment?: string }) =>
+    api.post('/ratings', data),
   getRideRatings: (rideId: string) => api.get(`/ratings/ride/${rideId}`),
 };
 

@@ -36,19 +36,23 @@ const RideComplete: React.FC = () => {
   };
 
   const submitRating = async () => {
-    if (!ride?.driver_user_id) return;
+    if (!ride?.driver_user_id) {
+      toast.error('Driver info missing — cannot submit rating');
+      return;
+    }
     setSubmitting(true);
     try {
       await ratingAPI.createRating({
-        ride_id: rideId,
+        ride_id: rideId!,
         to_user_id: ride.driver_user_id,
         rating,
-        comment: comment || undefined,
+        comment: comment.trim() || undefined,
       });
       toast.success('Thanks for your rating!');
       setAlreadyRated(true);
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to submit rating');
+      const detail = error.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to submit rating');
     } finally {
       setSubmitting(false);
     }
