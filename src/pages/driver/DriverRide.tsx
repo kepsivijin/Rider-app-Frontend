@@ -35,7 +35,7 @@ const DriverRide: React.FC = () => {
 
   const isActive = ride?.status === 'accepted' || ride?.status === 'started';
   const driverGeo = useDriverLocationBroadcast(rideId || null, isActive);
-  const { emitDriverLocation } = useWebSocket(rideId, undefined, handleCustomerLocation, 'driver');
+  const { emitDriverLocation } = useWebSocket(rideId ?? null, undefined, handleCustomerLocation, 'driver');
 
   const [simPos, setSimPos] = useState<{ lat: number; lng: number } | null>(null);
   const emitRef = React.useRef(emitDriverLocation);
