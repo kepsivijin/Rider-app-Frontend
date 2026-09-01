@@ -7,7 +7,7 @@ import LocationSearchField from '../components/LocationSearchField';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
 import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER } from '../constants/serviceArea';
-import { canBookFare, estimateFareFromKm, haversineKm, vehicleRateLabel, VEHICLE_FARE } from '../constants/fare';
+import { canBookFare, estimateFareFromKm, fareDetailLine, haversineKm, VEHICLE_FARE } from '../constants/fare';
 import { AddressResult, reverseGeocode } from '../utils/format';
 import toast from 'react-hot-toast';
 
@@ -48,11 +48,12 @@ const Home: React.FC = () => {
     from: { lat: number; lng: number },
     to: { lat: number; lng: number },
     vType: 'bike' | 'auto' | 'car' = vehicleType,
+    pax: number = passengerCount,
   ) => {
     const distance = haversineKm(from.lat, from.lng, to.lat, to.lng);
     setDistanceKm(distance);
-    setEstimatedFare(estimateFareFromKm(distance, vType));
-  }, [vehicleType]);
+    setEstimatedFare(estimateFareFromKm(distance, vType, pax));
+  }, [vehicleType, passengerCount]);
 
   const applyCoords = async (lat: number, lng: number, field: ActiveField) => {
     if (field === 'pickup') {
@@ -300,7 +301,7 @@ const Home: React.FC = () => {
                 onClick={() => {
                   setVehicleType(v.type);
                   setPassengerCount(v.pax);
-                  if (pickup && dropoff) calculateFare(pickup, dropoff, v.type);
+                  if (pickup && dropoff) calculateFare(pickup, dropoff, v.type, v.pax);
                 }}
                 className={`p-3 rounded-xl border-2 text-center transition ${
                   vehicleType === v.type ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-300'
@@ -308,10 +309,32 @@ const Home: React.FC = () => {
               >
                 <span className="text-xl">{v.icon}</span>
                 <p className="font-semibold text-sm mt-1">{v.label}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{VEHICLE_FARE[v.type].rateHint}</p>
               </button>
             ))}
           </div>
+
+          {(vehicleType === 'auto' || vehicleType === 'car') && (
+            <div className="mb-5">
+              <p className="text-xs font-medium text-gray-500 mb-2">Passengers</p>
+              <div className="flex gap-2">
+                {Array.from({ length: VEHICLE_FARE[vehicleType].maxPassengers }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => {
+                      setPassengerCount(n);
+                      if (pickup && dropoff) calculateFare(pickup, dropoff, vehicleType, n);
+                    }}
+                    className={`flex-1 py-2 rounded-xl border-2 text-sm font-semibold transition ${
+                      passengerCount === n ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Suggestions */}
           <p className="text-sm font-semibold text-gray-800 mb-2">Popular routes</p>
@@ -335,12 +358,12 @@ const Home: React.FC = () => {
           {estimatedFare != null && distanceKm != null && (
             <div className="mb-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
               <p className="text-sm text-gray-500">
-                {VEHICLE_FARE[vehicleType].label} · Cash · {vehicleRateLabel(vehicleType)}
+                {VEHICLE_FARE[vehicleType].label} · Cash · {fareDetailLine(vehicleType, passengerCount)}
               </p>
               <p className="text-3xl font-bold">₹{estimatedFare}</p>
               <p className="text-sm text-gray-600 mt-1">{distanceKm.toFixed(1)} km</p>
               {!canBookFare(estimatedFare) && (
-                <p className="text-xs text-amber-700 mt-2">Fare must be above ₹5 to book</p>
+                <p className="text-xs text-amber-700 mt-2">Minimum fare above ₹5 required</p>
               )}
             </div>
           )}
