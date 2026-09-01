@@ -40,7 +40,7 @@ const RideTracking: React.FC = () => {
   useEffect(() => {
     if (rideId) {
       loadRide();
-      const interval = setInterval(loadRide, 5000);
+      const interval = setInterval(loadRide, 2000);
       return () => clearInterval(interval);
     }
   }, [rideId]);
@@ -51,6 +51,16 @@ const RideTracking: React.FC = () => {
       const next = response.data;
       setRide(next);
       setLoading(false);
+
+      if (next.driver_latitude != null && next.driver_longitude != null) {
+        const point = {
+          latitude: next.driver_latitude,
+          longitude: next.driver_longitude,
+          timestamp: new Date().toISOString(),
+        };
+        setDriverLocation(point);
+        setDriverPath((prev) => [...prev, { lat: point.latitude, lng: point.longitude }].slice(-60));
+      }
 
       if (prevStatusRef.current === 'requested' && next.status === 'accepted') {
         notifySuccess(
