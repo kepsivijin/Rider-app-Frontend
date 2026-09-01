@@ -149,6 +149,7 @@ const DriverRide: React.FC = () => {
             <p className="font-medium">{ride.dropoff_address}</p>
           </div>
           <p className="text-2xl font-bold">₹{Math.round(ride.estimated_fare)} <span className="text-sm font-normal text-gray-500">cash</span></p>
+          <p className="text-sm text-gray-500">{ride.distance_km?.toFixed(1)} km · ₹5/km</p>
           {ride.customer_name && <p className="text-gray-600">Customer: {ride.customer_name}</p>}
         </div>
 

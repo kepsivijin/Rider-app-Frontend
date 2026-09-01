@@ -1,4 +1,11 @@
-import { SERVICE_LOCATIONS } from '../constants/serviceArea';
+import { SERVICE_LOCATIONS, SERVICE_AREA_BOUNDS } from '../constants/serviceArea';
+
+export interface AddressResult {
+  address: string;
+  lat: number;
+  lng: number;
+  source: 'local' | 'osm';
+}
 
 const COORD_PATTERN = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
 const PRESET_SNAP_KM = 0.4;
@@ -60,6 +67,57 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   }
 
   return nearestPreset(lat, lng) || `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+}
+
+function isWithinServiceArea(lat: number, lng: number): boolean {
+  const [[south, west], [north, east]] = SERVICE_AREA_BOUNDS;
+  return lat >= south && lat <= north && lng >= west && lng <= east;
+}
+
+export async function searchAddress(query: string): Promise<AddressResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  const q = trimmed.toLowerCase();
+  const local: AddressResult[] = Object.values(SERVICE_LOCATIONS)
+    .filter((loc) => loc.address.toLowerCase().includes(q))
+    .map((loc) => ({ address: loc.address, lat: loc.lat, lng: loc.lng, source: 'local' as const }));
+
+  const [[south, west], [north, east]] = SERVICE_AREA_BOUNDS;
+  const viewbox = `${west},${north},${east},${south}`;
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed)}&viewbox=${viewbox}&bounded=1&limit=6&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'KanyakumariRideShare/1.0' } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const osm: AddressResult[] = data
+        .map((item: { lat: string; lon: string; address?: Record<string, string>; display_name?: string }) => {
+          const lat = parseFloat(item.lat);
+          const lng = parseFloat(item.lon);
+          const address =
+            formatNominatimAddress(item.address || {}, item.display_name) ||
+            item.display_name?.split(',').slice(0, 3).join(', ') ||
+            trimmed;
+          return { address, lat, lng, source: 'osm' as const };
+        })
+        .filter((r: AddressResult) => isWithinServiceArea(r.lat, r.lng));
+
+      const seen = new Set<string>();
+      return [...local, ...osm].filter((r) => {
+        const key = `${r.address.toLowerCase()}|${r.lat.toFixed(4)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 8);
+    }
+  } catch {
+    // fall through
+  }
+
+  return local.slice(0, 8);
 }
 
 export function looksLikeCoordinates(address: string): boolean {

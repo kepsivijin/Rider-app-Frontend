@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import Map, { MapClickEvent } from '../components/Map';
 import MapControls from '../components/MapControls';
 import GeolocationBanner from '../components/GeolocationBanner';
+import LocationSearchField from '../components/LocationSearchField';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
 import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER } from '../constants/serviceArea';
-import { reverseGeocode } from '../utils/format';
+import { FARE_PER_KM, estimateFareFromKm, haversineKm } from '../constants/fare';
+import { AddressResult, reverseGeocode } from '../utils/format';
 import toast from 'react-hot-toast';
 
 type RideMode = 'now' | 'scheduled';
@@ -24,6 +26,7 @@ const Home: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [vehicleType, setVehicleType] = useState<'bike' | 'auto' | 'car'>('auto');
   const [passengerCount, setPassengerCount] = useState(3);
   const [loading, setLoading] = useState(false);
@@ -44,17 +47,11 @@ const Home: React.FC = () => {
   const calculateFare = useCallback((
     from: { lat: number; lng: number },
     to: { lat: number; lng: number },
-    vType: 'bike' | 'auto' | 'car' = vehicleType
   ) => {
-    const R = 6371;
-    const dLat = (to.lat - from.lat) * Math.PI / 180;
-    const dLon = (to.lng - from.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-    const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const rates = { bike: { base: 20, perKm: 8 }, auto: { base: 40, perKm: 12 }, car: { base: 60, perKm: 15 } };
-    setEstimatedFare(Math.round(rates[vType].base + distance * rates[vType].perKm));
-  }, [vehicleType]);
+    const distance = haversineKm(from.lat, from.lng, to.lat, to.lng);
+    setDistanceKm(distance);
+    setEstimatedFare(estimateFareFromKm(distance));
+  }, []);
 
   const applyCoords = async (lat: number, lng: number, field: ActiveField) => {
     if (field === 'pickup') {
@@ -65,6 +62,20 @@ const Home: React.FC = () => {
       setDropoff({ lat, lng });
       await setLocationAddress(lat, lng, setDropoffAddress);
       if (pickup) calculateFare(pickup, { lat, lng });
+      setActiveField(null);
+      setFitRouteKey((k) => k + 1);
+    }
+  };
+
+  const selectSearchResult = (field: ActiveField, result: AddressResult) => {
+    if (field === 'pickup') {
+      setPickup({ lat: result.lat, lng: result.lng });
+      setPickupAddress(result.address);
+      setActiveField('dropoff');
+    } else if (field === 'dropoff') {
+      setDropoff({ lat: result.lat, lng: result.lng });
+      setDropoffAddress(result.address);
+      if (pickup) calculateFare(pickup, { lat: result.lat, lng: result.lng });
       setActiveField(null);
       setFitRouteKey((k) => k + 1);
     }
@@ -235,45 +246,35 @@ const Home: React.FC = () => {
           <div className="relative mb-4">
             <div className="absolute left-4 top-8 bottom-8 w-0.5 bg-gray-300" />
             <div className="space-y-2">
-              <div
-                className={`relative flex items-center gap-3 rounded-xl border-2 bg-gray-50 px-4 py-3 transition ${
-                  activeField === 'pickup' ? 'border-black ring-2 ring-black/10' : 'border-gray-200'
-                }`}
-              >
-                <span className="w-3 h-3 rounded-full bg-black flex-shrink-0 z-10" />
-                <input
-                  type="text"
-                  placeholder="Pickup location"
-                  value={pickupAddress}
-                  onFocus={() => setActiveField('pickup')}
-                  onChange={(e) => setPickupAddress(e.target.value)}
-                  className="flex-1 bg-transparent outline-none text-sm font-medium placeholder:text-gray-400"
-                />
-                <button
-                  type="button"
-                  onClick={useMyLocationForPickup}
-                  disabled={geo.loading}
-                  title="Use current location"
-                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
-                >
-                  {geo.loading ? '…' : '🎯'}
-                </button>
-              </div>
-              <div
-                className={`relative flex items-center gap-3 rounded-xl border-2 bg-gray-50 px-4 py-3 transition ${
-                  activeField === 'dropoff' ? 'border-black ring-2 ring-black/10' : 'border-gray-200'
-                }`}
-              >
-                <span className="w-3 h-3 rounded-sm bg-black flex-shrink-0 z-10" />
-                <input
-                  type="text"
-                  placeholder="Dropoff location"
-                  value={dropoffAddress}
-                  onFocus={() => setActiveField('dropoff')}
-                  onChange={(e) => setDropoffAddress(e.target.value)}
-                  className="flex-1 bg-transparent outline-none text-sm font-medium placeholder:text-gray-400"
-                />
-              </div>
+              <LocationSearchField
+                value={pickupAddress}
+                placeholder="Search pickup — e.g. Poothurai"
+                active={activeField === 'pickup'}
+                icon={<span className="w-3 h-3 rounded-full bg-black flex-shrink-0 z-10" />}
+                onFocus={() => setActiveField('pickup')}
+                onChange={setPickupAddress}
+                onSelect={(result) => selectSearchResult('pickup', result)}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={useMyLocationForPickup}
+                    disabled={geo.loading}
+                    title="Use current location"
+                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
+                  >
+                    {geo.loading ? '…' : '🎯'}
+                  </button>
+                }
+              />
+              <LocationSearchField
+                value={dropoffAddress}
+                placeholder="Search dropoff — e.g. Nithiravilai"
+                active={activeField === 'dropoff'}
+                icon={<span className="w-3 h-3 rounded-sm bg-black flex-shrink-0 z-10" />}
+                onFocus={() => setActiveField('dropoff')}
+                onChange={setDropoffAddress}
+                onSelect={(result) => selectSearchResult('dropoff', result)}
+              />
             </div>
           </div>
 
@@ -298,7 +299,6 @@ const Home: React.FC = () => {
                 onClick={() => {
                   setVehicleType(v.type);
                   setPassengerCount(v.pax);
-                  if (pickup && dropoff) calculateFare(pickup, dropoff, v.type);
                 }}
                 className={`p-3 rounded-xl border-2 text-center transition ${
                   vehicleType === v.type ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-300'
@@ -329,10 +329,11 @@ const Home: React.FC = () => {
             ))}
           </div>
 
-          {estimatedFare && (
+          {estimatedFare != null && distanceKm != null && (
             <div className="mb-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
-              <p className="text-sm text-gray-500">Estimated fare · Cash</p>
+              <p className="text-sm text-gray-500">Estimated fare · Cash · ₹{FARE_PER_KM}/km</p>
               <p className="text-3xl font-bold">₹{estimatedFare}</p>
+              <p className="text-sm text-gray-600 mt-1">{distanceKm.toFixed(1)} km</p>
             </div>
           )}
 

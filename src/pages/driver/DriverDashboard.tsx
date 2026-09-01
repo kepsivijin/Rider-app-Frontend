@@ -206,7 +206,10 @@ const DriverDashboard: React.FC = () => {
                         {(ride.vehicle_type || 'bike').toUpperCase()} · {ride.passenger_count || 1} passenger · Cash
                       </p>
                     </div>
-                    <p className="text-xl font-bold text-primary">₹{Math.round(ride.estimated_fare)}</p>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-primary">₹{Math.round(ride.estimated_fare)}</p>
+                      <p className="text-xs text-gray-500">{ride.distance_km?.toFixed(1)} km</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => navigate(`/driver/ride/${ride.id}`)}

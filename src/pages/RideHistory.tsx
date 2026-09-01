@@ -11,6 +11,7 @@ interface Ride {
   status: string;
   estimated_fare: number;
   actual_fare?: number;
+  distance_km?: number;
   completed_at?: string;
   scheduled_at?: string;
   created_at: string;
@@ -94,6 +95,10 @@ const RideHistory: React.FC = () => {
                     ? `Scheduled: ${formatDateTime(ride.scheduled_at)}`
                     : formatDateTime(ride.completed_at || ride.created_at)}
                 </span>
+                {ride.distance_km != null && <span>{ride.distance_km.toFixed(1)} km</span>}
+              </div>
+              <div className="flex justify-between mt-1 text-xs text-gray-400">
+                <span />
                 {ride.driver_name && <span>Driver: {ride.driver_name}</span>}
               </div>
             </button>
