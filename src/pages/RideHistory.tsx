@@ -12,6 +12,7 @@ interface Ride {
   estimated_fare: number;
   actual_fare?: number;
   completed_at?: string;
+  scheduled_at?: string;
   created_at: string;
   driver_name?: string;
 }
@@ -71,9 +72,16 @@ const RideHistory: React.FC = () => {
               className="w-full bg-white rounded-xl shadow p-4 text-left hover:shadow-md transition"
             >
               <div className="flex justify-between items-start mb-2">
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor(ride.status)}`}>
-                  {formatStatus(ride.status)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor(ride.status)}`}>
+                    {formatStatus(ride.status)}
+                  </span>
+                  {ride.scheduled_at && ride.status === 'requested' && (
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                      Scheduled
+                    </span>
+                  )}
+                </div>
                 <span className="font-bold text-primary">
                   ₹{Math.round(ride.actual_fare ?? ride.estimated_fare)}
                 </span>
@@ -81,7 +89,11 @@ const RideHistory: React.FC = () => {
               <p className="font-medium text-gray-800 truncate">{ride.pickup_address}</p>
               <p className="text-sm text-gray-500 truncate">→ {ride.dropoff_address}</p>
               <div className="flex justify-between mt-2 text-xs text-gray-400">
-                <span>{formatDateTime(ride.completed_at || ride.created_at)}</span>
+                <span>
+                  {ride.scheduled_at && ride.status === 'requested'
+                    ? `Scheduled: ${formatDateTime(ride.scheduled_at)}`
+                    : formatDateTime(ride.completed_at || ride.created_at)}
+                </span>
                 {ride.driver_name && <span>Driver: {ride.driver_name}</span>}
               </div>
             </button>

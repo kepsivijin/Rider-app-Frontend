@@ -72,7 +72,7 @@ function FitRouteBounds({ markers, enabled }: { markers: MapProps['markers']; en
       return;
     }
     const bounds = L.latLngBounds(pts.map((m) => [m.lat, m.lng] as [number, number]));
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
   }, [markers, enabled, map]);
   return null;
 }
@@ -83,6 +83,21 @@ function FollowLiveCenter({ center, enabled }: { center?: { lat: number; lng: nu
     if (!enabled || !center) return;
     map.panTo([center.lat, center.lng], { animate: true, duration: 0.8 });
   }, [center?.lat, center?.lng, enabled, map]);
+  return null;
+}
+
+/** Lock pan/zoom to the service area box shown on the booking map. */
+function LockServiceArea({ fitRoute }: { fitRoute?: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    const bounds = L.latLngBounds(SERVICE_AREA_BOUNDS);
+    map.setMaxBounds(bounds.pad(0.02));
+    map.options.minZoom = 11;
+    map.options.maxZoom = 16;
+    if (!fitRoute) {
+      map.fitBounds(bounds, { padding: [8, 8], maxZoom: 14 });
+    }
+  }, [map, fitRoute]);
   return null;
 }
 
@@ -108,6 +123,10 @@ const LeafletMap: React.FC<MapProps> = ({
     <MapContainer
       center={[mapCenter.lat, mapCenter.lng]}
       zoom={13}
+      minZoom={11}
+      maxZoom={16}
+      maxBounds={SERVICE_AREA_BOUNDS}
+      maxBoundsViscosity={1.0}
       style={{ width: '100%', height: '100%' }}
       scrollWheelZoom
       className="z-0"
@@ -116,6 +135,7 @@ const LeafletMap: React.FC<MapProps> = ({
         attribution='&copy; OpenStreetMap · Kanyakumari'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <LockServiceArea fitRoute={fitRoute} />
       <Rectangle
         bounds={SERVICE_AREA_BOUNDS}
         pathOptions={{ color: '#0ea5e9', weight: 2, fillColor: '#0ea5e9', fillOpacity: 0.08, dashArray: '6 4' }}

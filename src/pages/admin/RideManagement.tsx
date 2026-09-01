@@ -78,7 +78,10 @@ const RideManagement: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-gray-500">
-                  <span>{formatDateTime(ride.completed_at || ride.created_at)}</span>
+                  <span>{formatDateTime(ride.completed_at || ride.scheduled_at || ride.created_at)}</span>
+                  {ride.scheduled_at && ride.status === 'requested' && (
+                    <span className="text-blue-600 font-medium">Scheduled: {formatDateTime(ride.scheduled_at)}</span>
+                  )}
                   <span>{ride.distance_km?.toFixed(1)} km</span>
                   <span className="capitalize">{ride.payment_method}</span>
                   {ride.customer_name && <span>Customer: {ride.customer_name}</span>}

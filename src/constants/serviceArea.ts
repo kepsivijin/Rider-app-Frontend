@@ -5,12 +5,13 @@
 
 export const SERVICE_AREA_NAME = 'Marthandam Region';
 
-export const SERVICE_AREA_CENTER = { lat: 8.29, lng: 77.165 };
+// Center of coastal Kollemcode / Vilavancode strip (Kuzhithurai–Pudukadai area)
+export const SERVICE_AREA_CENTER = { lat: 8.285, lng: 77.155 };
 
-// Leaflet bounds: [[south, west], [north, east]]
+// Leaflet bounds: [[south, west], [north, east]] — matches service map box
 export const SERVICE_AREA_BOUNDS: [[number, number], [number, number]] = [
-  [8.255, 77.085],
-  [8.325, 77.245],
+  [8.24, 77.1],
+  [8.33, 77.24],
 ];
 
 export const SERVICE_LOCATIONS = {
@@ -25,6 +26,11 @@ export const SERVICE_LOCATIONS = {
 };
 
 export const ROUTE_PRESETS = [
+  {
+    name: 'Poothurai → Nithiravilai',
+    pickup: SERVICE_LOCATIONS.poothurai,
+    dropoff: SERVICE_LOCATIONS.nithiravilai,
+  },
   {
     name: 'Poothurai → Thoothoor Church',
     pickup: SERVICE_LOCATIONS.poothurai,
