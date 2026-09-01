@@ -18,7 +18,9 @@ export function useSimulatedDriverMovement(
 
     indexRef.current = 0;
     const maxIndex =
-      rideStatus === 'started' ? route.length - 1 : Math.max(1, Math.floor(route.length * 0.35));
+      rideStatus === 'started'
+        ? route.length - 1
+        : Math.max(1, Math.floor(route.length * 0.45));
 
     const tick = () => {
       const idx = indexRef.current;
@@ -28,7 +30,7 @@ export function useSimulatedDriverMovement(
     };
 
     tick();
-    const interval = window.setInterval(tick, 2500);
+    const interval = window.setInterval(tick, 1800);
     return () => window.clearInterval(interval);
   }, [route, rideStatus, enabled, onMove]);
 }

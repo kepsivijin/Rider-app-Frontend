@@ -4,7 +4,7 @@ import { useWebSocket } from './useWebSocket';
 import { useSimulatedDriverMovement } from './useSimulatedDriverMovement';
 import { LatLng } from '../services/routing';
 
-/** Broadcast driver GPS (or demo simulation along road) to customer. */
+/** Broadcast driver GPS (real + demo simulation along road route for testing). */
 export function useDriverLocationBroadcast(
   rideId: string | null,
   enabled: boolean,
@@ -15,11 +15,8 @@ export function useDriverLocationBroadcast(
   const { emitDriverLocation } = useWebSocket(rideId, undefined, undefined, 'driver');
   const [simPosition, setSimPosition] = useState<{ lat: number; lng: number } | null>(null);
 
-  const simulating =
-    enabled &&
-    !!roadRoute?.length &&
-    (geo.error != null || geo.latitude == null) &&
-    (rideStatus === 'accepted' || rideStatus === 'started');
+  // Demo: always animate along road route when active (rural testing without real GPS)
+  const simulating = enabled && !!roadRoute?.length && !!rideStatus;
 
   useSimulatedDriverMovement(roadRoute, rideStatus, simulating, (lat, lng) => {
     setSimPosition({ lat, lng });
@@ -30,20 +27,21 @@ export function useDriverLocationBroadcast(
     if (!simulating) setSimPosition(null);
   }, [simulating, rideStatus]);
 
+  // Also send real GPS when available (overrides display if moving)
   useEffect(() => {
-    if (!enabled || simulating || !rideId || geo.latitude == null || geo.longitude == null) return;
+    if (!enabled || !rideId || geo.latitude == null || geo.longitude == null) return;
 
     emitDriverLocation(geo.latitude, geo.longitude);
     const interval = setInterval(() => {
       if (geo.latitude != null && geo.longitude != null) {
         emitDriverLocation(geo.latitude, geo.longitude);
       }
-    }, 4000);
+    }, 8000);
     return () => clearInterval(interval);
-  }, [enabled, simulating, rideId, geo.latitude, geo.longitude, emitDriverLocation]);
+  }, [enabled, rideId, geo.latitude, geo.longitude, emitDriverLocation]);
 
-  const latitude = geo.latitude ?? simPosition?.lat ?? null;
-  const longitude = geo.longitude ?? simPosition?.lng ?? null;
+  const latitude = simulating ? (simPosition?.lat ?? geo.latitude) : geo.latitude ?? simPosition?.lat ?? null;
+  const longitude = simulating ? (simPosition?.lng ?? geo.longitude) : geo.longitude ?? simPosition?.lng ?? null;
 
   return { ...geo, latitude, longitude, simulating };
 }
