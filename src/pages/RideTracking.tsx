@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Map from '../components/Map';
 import RideStatusTimeline from '../components/RideStatusTimeline';
@@ -21,6 +21,15 @@ const RideTracking: React.FC = () => {
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
   const [driverPath, setDriverPath] = useState<Array<{ lat: number; lng: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [followDriver, setFollowDriver] = useState(true);
+
+  const handleLocationUpdate = useCallback((data: any) => {
+    const point = { latitude: data.latitude, longitude: data.longitude, timestamp: data.timestamp };
+    setDriverLocation(point);
+    setDriverPath((prev) => [...prev, { lat: point.latitude, lng: point.longitude }].slice(-40));
+  }, []);
+
+  useWebSocket(rideId || null, handleLocationUpdate, 'customer');
 
   useEffect(() => {
     if (rideId) {
@@ -38,22 +47,19 @@ const RideTracking: React.FC = () => {
       setLoading(false);
 
       if (prevStatusRef.current === 'requested' && next.status === 'accepted') {
-        toast.success(`Driver accepted! ${next.driver_name || 'Driver'} · ${next.driver_vehicle || ''}`, { duration: 5000 });
+        toast.success(`Driver accepted! ${next.driver_name || ''}`, { duration: 5000 });
       }
       if (next.status === 'accepted' && next.pickup_otp && !notifiedOtpRef.current) {
         notifiedOtpRef.current = true;
-        toast.success(`Pickup OTP: ${next.pickup_otp} — tell this to your driver`, { duration: 8000 });
-      }
-      if (next.notification_message) {
-        // Shown in banner below
+        toast.success(`Pickup OTP: ${next.pickup_otp}`, { duration: 8000 });
       }
       if (prevStatusRef.current === 'accepted' && next.status === 'started') {
-        toast.success('Ride started — heading to your destination');
+        toast.success('Ride started!');
       }
       prevStatusRef.current = next.status;
 
       if (next.status === 'completed') {
-        toast.success('Ride completed! Pay cash to driver.');
+        toast.success('Ride completed!');
         setTimeout(() => navigate(`/ride/${rideId}/complete`), 1200);
       }
     } catch {
@@ -61,21 +67,10 @@ const RideTracking: React.FC = () => {
     }
   };
 
-  const handleLocationUpdate = (data: any) => {
-    const point = { latitude: data.latitude, longitude: data.longitude, timestamp: data.timestamp };
-    setDriverLocation(point);
-    setDriverPath((prev) => {
-      const next = [...prev, { lat: point.latitude, lng: point.longitude }];
-      return next.slice(-20);
-    });
-  };
-
-  useWebSocket(rideId || null, handleLocationUpdate);
-
   if (loading || !ride) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      <div className="h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black" />
       </div>
     );
   }
@@ -88,91 +83,92 @@ const RideTracking: React.FC = () => {
     markers.push({ lat: driverLocation.latitude, lng: driverLocation.longitude, label: '🚗' });
   }
 
-  const mapCenter = driverLocation
+  const mapCenter = followDriver && driverLocation
     ? { lat: driverLocation.latitude, lng: driverLocation.longitude }
-    : { lat: ride.pickup_latitude, lng: ride.pickup_longitude };
+    : driverLocation
+      ? { lat: driverLocation.latitude, lng: driverLocation.longitude }
+      : { lat: ride.pickup_latitude, lng: ride.pickup_longitude };
 
   const statusText: Record<string, string> = {
-    requested: 'Finding nearby driver…',
-    accepted: 'Driver is coming to pickup',
+    requested: 'Finding driver…',
+    accepted: 'Driver heading to pickup',
     started: 'On the way to dropoff',
-    completed: 'Ride completed',
+    completed: 'Completed',
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="bg-white shadow-md p-4 flex items-center justify-between">
-        <div className="flex items-center">
-          <button onClick={() => navigate('/')} className="text-gray-600 mr-4">←</button>
-          <div>
-            <h1 className="text-lg font-bold text-primary">Live Ride</h1>
-            <p className="text-xs text-gray-500">{statusText[ride.status] || ride.status}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500">Cash fare</p>
-          <p className="font-bold text-primary">₹{Math.round(ride.estimated_fare)}</p>
-        </div>
-      </div>
-
-      <div className="flex-1 relative min-h-[45vh]">
+    <div className="h-screen flex flex-col md:flex-row bg-white">
+      {/* Map — primary on mobile */}
+      <div className="flex-1 relative min-h-[50vh] md:min-h-0 order-first">
         <Map
           center={mapCenter}
           markers={markers}
           trackingMode
           driverPath={driverPath}
+          fitRoute
+          followLive={followDriver && !!driverLocation}
         />
-      </div>
-
-      <div className="bg-white border-t shadow-lg p-4 max-h-[45vh] overflow-y-auto">
-        {ride.status === 'accepted' && ride.pickup_otp && !ride.pickup_verified && (
-          <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl">
-            <p className="text-sm font-semibold text-amber-900">🔔 Driver accepted — Pickup OTP</p>
-            <p className="text-3xl font-bold text-amber-700 tracking-widest my-2">{ride.pickup_otp}</p>
-            <p className="text-sm text-amber-800">Tell this code to your driver when they arrive. (Demo test code: 987653)</p>
+        {driverLocation && (
+          <div className="absolute top-4 left-4 z-[1000] bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            Driver live on map
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => setFollowDriver((f) => !f)}
+          className="absolute bottom-4 right-4 z-[1000] bg-white shadow-lg rounded-full px-4 py-2 text-sm font-semibold border border-gray-200"
+        >
+          {followDriver ? '📍 Following driver' : '🗺 Show full route'}
+        </button>
+      </div>
 
-        {ride.pickup_verified && ride.status === 'accepted' && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm font-medium">
-            ✓ Driver verified your OTP — ride will start soon
+      {/* Details panel */}
+      <aside className="w-full md:w-[400px] flex-shrink-0 border-t md:border-t-0 md:border-l border-gray-100 overflow-y-auto p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <button type="button" onClick={() => navigate('/')} className="text-gray-500 hover:text-black">← Back</button>
+          <div className="text-right">
+            <p className="text-xs text-gray-500">{statusText[ride.status]}</p>
+            <p className="font-bold text-xl">₹{Math.round(ride.estimated_fare)}</p>
+          </div>
+        </div>
+
+        {ride.status === 'accepted' && ride.pickup_otp && !ride.pickup_verified && (
+          <div className="p-4 bg-amber-50 border-2 border-amber-400 rounded-2xl">
+            <p className="text-sm font-semibold text-amber-900">Pickup OTP — tell your driver</p>
+            <p className="text-4xl font-bold text-amber-800 tracking-widest my-2">{ride.pickup_otp}</p>
+            <p className="text-xs text-amber-700">Demo test code: 987653</p>
           </div>
         )}
 
         <RideStatusTimeline status={ride.status} />
 
         {ride.status === 'requested' && (
-          <div className="text-center py-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-2"></div>
-            <p className="text-sm text-gray-600">Waiting for a driver to accept…</p>
+          <div className="text-center py-6">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black mx-auto mb-3" />
+            <p className="text-sm text-gray-600">Waiting for a driver…</p>
           </div>
         )}
 
-        {ride.driver_id && ride.status !== 'requested' && (
-          <div className="space-y-3 mt-3">
-            <div className="bg-gray-50 p-3 rounded-xl flex justify-between items-center">
-              <div>
-                <p className="text-xs text-gray-500">Driver</p>
-                <p className="font-semibold">{ride.driver_name}</p>
-                <p className="text-xs text-gray-600">{ride.driver_vehicle}</p>
-              </div>
-              {driverLocation && (
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Live on map</span>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-green-50 p-2 rounded-lg">
-                <p className="text-xs text-gray-500">Pickup</p>
-                <p className="font-medium line-clamp-2">{ride.pickup_address}</p>
-              </div>
-              <div className="bg-red-50 p-2 rounded-lg">
-                <p className="text-xs text-gray-500">Dropoff</p>
-                <p className="font-medium line-clamp-2">{ride.dropoff_address}</p>
-              </div>
-            </div>
+        {ride.driver_name && (
+          <div className="p-4 bg-gray-50 rounded-2xl">
+            <p className="text-xs text-gray-500">Driver</p>
+            <p className="font-bold text-lg">{ride.driver_name}</p>
+            <p className="text-sm text-gray-600">{ride.driver_vehicle}</p>
           </div>
         )}
-      </div>
+
+        <div className="space-y-3 text-sm">
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">A</span>
+            <p className="font-medium">{ride.pickup_address}</p>
+          </div>
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-sm bg-black text-white flex items-center justify-center text-xs font-bold flex-shrink-0">B</span>
+            <p className="font-medium">{ride.dropoff_address}</p>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

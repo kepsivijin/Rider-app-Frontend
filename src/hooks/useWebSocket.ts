@@ -1,43 +1,57 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8001';
 
-export const useWebSocket = (rideId: string | null, onLocationUpdate: (data: any) => void) => {
+export const useWebSocket = (
+  rideId: string | null,
+  onLocationUpdate: (data: any) => void,
+  userType: 'customer' | 'driver' = 'customer'
+) => {
   const socketRef = useRef<Socket | null>(null);
+  const onUpdateRef = useRef(onLocationUpdate);
+  onUpdateRef.current = onLocationUpdate;
 
   useEffect(() => {
     if (!rideId) return;
 
-    socketRef.current = io(WS_URL, {
-      transports: ['websocket'],
+    const socket = io(WS_URL, {
+      transports: ['websocket', 'polling'],
       path: '/ws/socket.io/',
     });
+    socketRef.current = socket;
 
-    socketRef.current.on('connect', () => {
-      console.log('WebSocket connected');
-      socketRef.current?.emit('join_ride', {
-        ride_id: rideId,
-        user_type: 'customer',
-      });
+    socket.on('connect', () => {
+      socket.emit('join_ride', { ride_id: rideId, user_type: userType });
     });
 
-    socketRef.current.on('customer_location_receive', (data) => {
-      console.log('Location update:', data);
-      onLocationUpdate(data);
+    socket.on('customer_location_receive', (data) => {
+      onUpdateRef.current(data);
     });
 
-    socketRef.current.on('ride_status_update', (data) => {
+    socket.on('ride_status_update', (data) => {
       console.log('Ride status update:', data);
     });
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.emit('leave_ride', { ride_id: rideId });
-        socketRef.current.disconnect();
-      }
+      socket.emit('leave_ride', { ride_id: rideId });
+      socket.disconnect();
+      socketRef.current = null;
     };
-  }, [rideId, onLocationUpdate]);
+  }, [rideId, userType]);
 
-  return socketRef.current;
+  const emitDriverLocation = useCallback(
+    (latitude: number, longitude: number) => {
+      if (!rideId || !socketRef.current?.connected) return;
+      socketRef.current.emit('driver_location_update', {
+        ride_id: rideId,
+        latitude,
+        longitude,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [rideId]
+  );
+
+  return { socket: socketRef.current, emitDriverLocation };
 };

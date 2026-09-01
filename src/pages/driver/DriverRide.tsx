@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Map from '../../components/Map';
+import GeolocationBanner from '../../components/GeolocationBanner';
+import { useDriverLocationBroadcast } from '../../hooks/useDriverLocationBroadcast';
 import { api, rideAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -11,6 +13,9 @@ const DriverRide: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [pickupOtpInput, setPickupOtpInput] = useState('');
+
+  const isActive = ride?.status === 'accepted' || ride?.status === 'started';
+  const driverGeo = useDriverLocationBroadcast(rideId || null, isActive);
 
   useEffect(() => {
     if (rideId) loadRide();
@@ -32,9 +37,9 @@ const DriverRide: React.FC = () => {
     try {
       const response = await api.post(`/rides/${rideId}/accept`);
       setRide(response.data);
-      toast.success('Ride accepted! Ask customer for pickup OTP (987653 in demo)');
+      toast.success('Accepted! Ask customer for OTP 987653');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to accept ride');
+      toast.error(error.response?.data?.detail || 'Failed to accept');
     } finally {
       setActionLoading(false);
     }
@@ -42,7 +47,7 @@ const DriverRide: React.FC = () => {
 
   const verifyPickupOtp = async () => {
     if (!pickupOtpInput.trim()) {
-      toast.error('Enter the OTP from the customer');
+      toast.error('Enter customer OTP');
       return;
     }
     setActionLoading(true);
@@ -63,9 +68,9 @@ const DriverRide: React.FC = () => {
     try {
       const response = await api.post(`/rides/${rideId}/start`);
       setRide(response.data);
-      toast.success('Ride started — heading to dropoff');
+      toast.success('Ride started!');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to start ride');
+      toast.error(error.response?.data?.detail || 'Failed to start');
     } finally {
       setActionLoading(false);
     }
@@ -78,7 +83,7 @@ const DriverRide: React.FC = () => {
       setRide(response.data);
       toast.success('Ride completed!');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to complete ride');
+      toast.error(error.response?.data?.detail || 'Failed to complete');
     } finally {
       setActionLoading(false);
     }
@@ -87,7 +92,7 @@ const DriverRide: React.FC = () => {
   if (loading || !ride) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black" />
       </div>
     );
   }
@@ -96,131 +101,100 @@ const DriverRide: React.FC = () => {
     requested: 'New Request',
     accepted: 'Go to Pickup',
     started: 'On Trip',
-    completed: 'Completed',
+    completed: 'Done',
   };
 
   const markers = [
     { lat: ride.pickup_latitude, lng: ride.pickup_longitude, label: 'A' },
     { lat: ride.dropoff_latitude, lng: ride.dropoff_longitude, label: 'B' },
   ];
+  if (driverGeo.latitude != null && driverGeo.longitude != null) {
+    markers.push({ lat: driverGeo.latitude, lng: driverGeo.longitude, label: '🚗' });
+  }
+
+  const mapCenter = driverGeo.latitude != null && driverGeo.longitude != null
+    ? { lat: driverGeo.latitude, lng: driverGeo.longitude }
+    : { lat: ride.pickup_latitude, lng: ride.pickup_longitude };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="bg-white shadow-md p-4 flex items-center">
-        <button onClick={() => navigate('/driver')} className="text-gray-600 mr-4">← Back</button>
-        <h1 className="text-xl font-bold text-primary">{statusLabel[ride.status] || ride.status}</h1>
-      </div>
-
-      <div className="h-64 min-h-[240px] relative">
-        <Map
-          center={{ lat: ride.pickup_latitude, lng: ride.pickup_longitude }}
-          markers={markers}
-          trackingMode
-        />
-      </div>
-
-      <div className="p-6 space-y-4 flex-1">
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <span className="bg-green-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">A</span>
-              <div>
-                <p className="text-sm text-gray-500">Pickup</p>
-                <p className="font-semibold">{ride.pickup_address}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">B</span>
-              <div>
-                <p className="text-sm text-gray-500">Dropoff</p>
-                <p className="font-semibold">{ride.dropoff_address}</p>
-              </div>
-            </div>
-            <div className="bg-primary/10 p-4 rounded-xl flex justify-between items-center">
-              <span className="text-gray-600">Fare</span>
-              <span className="text-2xl font-bold text-primary">₹{Math.round(ride.estimated_fare)}</span>
-            </div>
-            <div className="text-sm text-gray-500">
-              Distance: {ride.distance_km?.toFixed(1)} km · Cash
-              {ride.passenger_count ? ` · ${ride.passenger_count} passenger` : ''}
-            </div>
-            {ride.customer_name && (
-              <div className="text-sm">
-                <span className="text-gray-500">Customer: </span>
-                <span className="font-semibold">{ride.customer_name}</span>
-                {ride.customer_phone && <span className="text-gray-500"> · {ride.customer_phone}</span>}
-              </div>
-            )}
+    <div className="h-screen flex flex-col md:flex-row bg-white">
+      <div className="flex-1 relative min-h-[45vh] md:min-h-0">
+        <Map center={mapCenter} markers={markers} trackingMode fitRoute followLive={isActive} />
+        {isActive && driverGeo.latitude != null && (
+          <div className="absolute top-4 left-4 z-[1000] bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
+            📡 Sharing your location with customer
           </div>
+        )}
+      </div>
+
+      <aside className="w-full md:w-[400px] flex-shrink-0 border-t md:border-l border-gray-100 overflow-y-auto p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => navigate('/driver')} className="text-gray-500">←</button>
+          <h1 className="text-lg font-bold">{statusLabel[ride.status]}</h1>
+        </div>
+
+        <GeolocationBanner
+          error={isActive ? driverGeo.error : null}
+          errorCode={driverGeo.errorCode}
+          onRetry={() => window.location.reload()}
+        />
+
+        <div className="p-4 bg-gray-50 rounded-2xl space-y-3 text-sm">
+          <div className="flex gap-2">
+            <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold">A</span>
+            <p className="font-medium">{ride.pickup_address}</p>
+          </div>
+          <div className="flex gap-2">
+            <span className="w-6 h-6 rounded-sm bg-black text-white flex items-center justify-center text-xs font-bold">B</span>
+            <p className="font-medium">{ride.dropoff_address}</p>
+          </div>
+          <p className="text-2xl font-bold">₹{Math.round(ride.estimated_fare)} <span className="text-sm font-normal text-gray-500">cash</span></p>
+          {ride.customer_name && <p className="text-gray-600">Customer: {ride.customer_name}</p>}
         </div>
 
         {ride.status === 'requested' && (
-          <button
-            onClick={acceptRide}
-            disabled={actionLoading}
-            className="w-full bg-green-500 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-600 disabled:opacity-50"
-          >
-            {actionLoading ? 'Accepting...' : 'Accept Ride'}
+          <button type="button" onClick={acceptRide} disabled={actionLoading}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-bold disabled:opacity-50">
+            {actionLoading ? 'Accepting…' : 'Accept Ride'}
           </button>
         )}
 
         {ride.status === 'accepted' && !ride.pickup_verified && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 space-y-3">
-            <p className="font-semibold text-gray-800">Verify customer pickup OTP</p>
-            <p className="text-sm text-gray-600">Ask the customer for the OTP shown in their app (demo: 987653)</p>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={pickupOtpInput}
+          <div className="space-y-3 p-4 border-2 border-amber-300 rounded-2xl bg-amber-50">
+            <p className="font-semibold">Verify customer OTP</p>
+            <p className="text-sm text-gray-600">Customer shows OTP in their app (demo: 987653)</p>
+            <input type="text" inputMode="numeric" maxLength={6} value={pickupOtpInput}
               onChange={(e) => setPickupOtpInput(e.target.value.replace(/\D/g, ''))}
-              placeholder="Enter customer OTP"
-              className="w-full border-2 border-gray-200 rounded-xl p-3 text-center text-2xl tracking-widest font-bold"
-            />
-            <button
-              onClick={verifyPickupOtp}
-              disabled={actionLoading}
-              className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold hover:bg-amber-600 disabled:opacity-50"
-            >
-              {actionLoading ? 'Verifying...' : 'Verify Customer OTP'}
+              placeholder="987653"
+              className="w-full border-2 rounded-xl p-3 text-center text-2xl font-bold tracking-widest" />
+            <button type="button" onClick={verifyPickupOtp} disabled={actionLoading}
+              className="w-full bg-amber-500 text-white py-3 rounded-xl font-bold disabled:opacity-50">
+              Verify OTP
             </button>
           </div>
         )}
 
         {ride.status === 'accepted' && ride.pickup_verified && (
-          <button
-            onClick={startRide}
-            disabled={actionLoading}
-            className="w-full bg-primary text-white py-4 rounded-xl font-bold text-lg hover:bg-primary/90 disabled:opacity-50"
-          >
-            {actionLoading ? 'Starting...' : 'Arrived — Start Ride (Pickup Done)'}
+          <button type="button" onClick={startRide} disabled={actionLoading}
+            className="w-full bg-black text-white py-4 rounded-xl font-bold disabled:opacity-50">
+            Start Ride
           </button>
         )}
 
         {ride.status === 'started' && (
-          <button
-            onClick={completeRide}
-            disabled={actionLoading}
-            className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            {actionLoading ? 'Completing...' : 'Reached Dropoff — Complete Ride'}
+          <button type="button" onClick={completeRide} disabled={actionLoading}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-bold disabled:opacity-50">
+            Complete Ride
           </button>
         )}
 
         {ride.status === 'completed' && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 space-y-4">
-            <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center text-green-700 font-semibold">
-              Ride completed successfully!
-            </div>
-            <button
-              onClick={() => navigate('/driver')}
-              className="w-full bg-primary text-white py-3 rounded-xl font-semibold"
-            >
-              Back to Dashboard
-            </button>
-          </div>
+          <button type="button" onClick={() => navigate('/driver')}
+            className="w-full bg-black text-white py-3 rounded-xl font-bold">
+            Back to Dashboard
+          </button>
         )}
-      </div>
+      </aside>
     </div>
   );
 };
