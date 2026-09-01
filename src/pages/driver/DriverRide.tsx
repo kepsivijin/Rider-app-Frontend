@@ -29,19 +29,40 @@ const DriverRide: React.FC = () => {
 
   const { route: tripRoute, loading: tripLoading } = useRoadRoute(pickup, dropoff, !!pickup && !!dropoff);
 
-  const isActive = ride?.status === 'accepted' || ride?.status === 'started';
-  const driverGeo = useDriverLocationBroadcast(
-    rideId || null,
-    isActive,
-    tripRoute?.coordinates,
-    ride?.status
-  );
-
   const handleCustomerLocation = useCallback((data: any) => {
     setCustomerLocation({ latitude: data.latitude, longitude: data.longitude });
   }, []);
 
-  useWebSocket(rideId || null, undefined, handleCustomerLocation, 'driver');
+  const isActive = ride?.status === 'accepted' || ride?.status === 'started';
+  const driverGeo = useDriverLocationBroadcast(rideId || null, isActive);
+  const { emitDriverLocation } = useWebSocket(rideId, undefined, handleCustomerLocation, 'driver');
+
+  const [simPos, setSimPos] = useState<{ lat: number; lng: number } | null>(null);
+  const emitRef = React.useRef(emitDriverLocation);
+  emitRef.current = emitDriverLocation;
+
+  // Demo: animate driver along road route (pickup → dropoff) for testing
+  useEffect(() => {
+    if (!isActive || !tripRoute?.coordinates?.length || !ride?.status) {
+      setSimPos(null);
+      return;
+    }
+    const coords = tripRoute.coordinates;
+    let idx = 0;
+    const maxIdx =
+      ride.status === 'started' ? coords.length - 1 : Math.max(2, Math.floor(coords.length * 0.55));
+
+    const tick = () => {
+      const p = coords[Math.min(idx, coords.length - 1)];
+      setSimPos({ lat: p.lat, lng: p.lng });
+      emitRef.current(p.lat, p.lng);
+      if (idx < maxIdx) idx += 1;
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1200);
+    return () => window.clearInterval(timer);
+  }, [isActive, tripRoute, ride?.status]);
 
   useEffect(() => {
     if (rideId) loadRide();
@@ -116,9 +137,10 @@ const DriverRide: React.FC = () => {
   };
 
   const driverPos =
-    driverGeo.latitude != null && driverGeo.longitude != null
+    simPos ??
+    (driverGeo.latitude != null && driverGeo.longitude != null
       ? { lat: driverGeo.latitude, lng: driverGeo.longitude }
-      : null;
+      : null);
 
   const navTarget = ride?.status === 'started' ? dropoff : ride?.status === 'accepted' ? pickup : null;
 
@@ -168,9 +190,9 @@ const DriverRide: React.FC = () => {
           fitRoute
           followLive={isActive && !!driverPos}
         />
-        {isActive && (driverPos || driverGeo.simulating) && (
+        {isActive && simPos && (
           <div className="absolute top-4 left-4 z-[1000] bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-            {driverGeo.simulating ? '🎬 Demo drive · customer sees you move' : '📡 Live · customer can see you'}
+            🎬 Demo drive · moving to {ride.status === 'started' ? 'dropoff' : 'pickup'}
           </div>
         )}
         {customerLocation && isActive && (
