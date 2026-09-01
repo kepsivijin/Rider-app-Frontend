@@ -130,7 +130,9 @@ const RideTracking: React.FC = () => {
           <div className="text-right">
             <p className="text-xs text-gray-500">{statusText[ride.status]}</p>
             <p className="font-bold text-xl">₹{Math.round(ride.estimated_fare)}</p>
-            <p className="text-xs text-gray-500">{ride.distance_km?.toFixed(1)} km · ₹5/km</p>
+            <p className="text-xs text-gray-500">
+              {ride.distance_km?.toFixed(1)} km · {(ride.vehicle_type || 'auto').toUpperCase()}
+            </p>
           </div>
         </div>
 

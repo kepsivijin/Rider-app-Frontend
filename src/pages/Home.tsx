@@ -7,7 +7,7 @@ import LocationSearchField from '../components/LocationSearchField';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
 import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER } from '../constants/serviceArea';
-import { FARE_PER_KM, estimateFareFromKm, haversineKm } from '../constants/fare';
+import { canBookFare, estimateFareFromKm, haversineKm, vehicleRateLabel, VEHICLE_FARE } from '../constants/fare';
 import { AddressResult, reverseGeocode } from '../utils/format';
 import toast from 'react-hot-toast';
 
@@ -47,11 +47,12 @@ const Home: React.FC = () => {
   const calculateFare = useCallback((
     from: { lat: number; lng: number },
     to: { lat: number; lng: number },
+    vType: 'bike' | 'auto' | 'car' = vehicleType,
   ) => {
     const distance = haversineKm(from.lat, from.lng, to.lat, to.lng);
     setDistanceKm(distance);
-    setEstimatedFare(estimateFareFromKm(distance));
-  }, []);
+    setEstimatedFare(estimateFareFromKm(distance, vType));
+  }, [vehicleType]);
 
   const applyCoords = async (lat: number, lng: number, field: ActiveField) => {
     if (field === 'pickup') {
@@ -170,7 +171,7 @@ const Home: React.FC = () => {
     : SERVICE_AREA_CENTER);
 
   const minDate = new Date().toISOString().split('T')[0];
-  const canBook = pickup && dropoff && estimatedFare;
+  const canBook = pickup && dropoff && estimatedFare != null && canBookFare(estimatedFare);
 
   return (
     <div className="h-screen flex flex-col bg-white">
@@ -299,6 +300,7 @@ const Home: React.FC = () => {
                 onClick={() => {
                   setVehicleType(v.type);
                   setPassengerCount(v.pax);
+                  if (pickup && dropoff) calculateFare(pickup, dropoff, v.type);
                 }}
                 className={`p-3 rounded-xl border-2 text-center transition ${
                   vehicleType === v.type ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-300'
@@ -306,6 +308,7 @@ const Home: React.FC = () => {
               >
                 <span className="text-xl">{v.icon}</span>
                 <p className="font-semibold text-sm mt-1">{v.label}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{VEHICLE_FARE[v.type].rateHint}</p>
               </button>
             ))}
           </div>
@@ -331,9 +334,14 @@ const Home: React.FC = () => {
 
           {estimatedFare != null && distanceKm != null && (
             <div className="mb-4 p-4 rounded-xl bg-gray-50 border border-gray-100">
-              <p className="text-sm text-gray-500">Estimated fare · Cash · ₹{FARE_PER_KM}/km</p>
+              <p className="text-sm text-gray-500">
+                {VEHICLE_FARE[vehicleType].label} · Cash · {vehicleRateLabel(vehicleType)}
+              </p>
               <p className="text-3xl font-bold">₹{estimatedFare}</p>
               <p className="text-sm text-gray-600 mt-1">{distanceKm.toFixed(1)} km</p>
+              {!canBookFare(estimatedFare) && (
+                <p className="text-xs text-amber-700 mt-2">Fare must be above ₹5 to book</p>
+              )}
             </div>
           )}
 
