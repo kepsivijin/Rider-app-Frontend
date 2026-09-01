@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
-import toast from 'react-hot-toast';
+import { notifyError, notifySuccess } from '../../utils/toastNotify';
 
 const DEFAULT_LOCATION = { latitude: 8.2875, longitude: 77.105 }; // Eramanthurai
 
@@ -25,7 +25,7 @@ const DriverDashboard: React.FC = () => {
       if (error.response?.status === 404) {
         setNoProfile(true);
       } else {
-        toast.error('Failed to load profile');
+        notifyError('Failed to load profile');
       }
     } finally {
       setLoading(false);
@@ -39,9 +39,9 @@ const DriverDashboard: React.FC = () => {
       for (const ride of rides) {
         if (!seenRideIds.current.has(ride.id)) {
           seenRideIds.current.add(ride.id);
-          toast.success(
-            `New ride request! ${ride.pickup_address} → ${ride.dropoff_address} · ₹${Math.round(ride.estimated_fare)} cash. Tap Accept.`,
-            { duration: 8000 }
+          notifySuccess(
+            `New ride! ${ride.pickup_address} → ${ride.dropoff_address} · ₹${Math.round(ride.estimated_fare)}`,
+            `ride-req-${ride.id}`
           );
         }
       }
@@ -94,12 +94,12 @@ const DriverDashboard: React.FC = () => {
       setIsOnline(goingOnline);
       if (goingOnline) {
         await updateLocation(DEFAULT_LOCATION.latitude, DEFAULT_LOCATION.longitude);
-        toast.success('You are online — ready for rides');
+        notifySuccess('You are online — ready for rides', 'online');
       } else {
-        toast.success('You are offline');
+        notifySuccess('You are offline', 'offline');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to toggle status');
+      notifyError(error.response?.data?.detail || 'Failed to toggle status');
     }
   };
 

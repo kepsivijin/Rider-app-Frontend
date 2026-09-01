@@ -28,7 +28,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Toaster position="top-center" />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 3000,
+            style: { maxWidth: '420px' },
+          }}
+          containerStyle={{ top: 16 }}
+        />
         <Routes>
           <Route path="/login" element={<Login />} />
 

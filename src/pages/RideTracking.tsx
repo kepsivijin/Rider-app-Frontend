@@ -7,7 +7,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useCustomerLocationBroadcast } from '../hooks/useCustomerLocationBroadcast';
 import { useRoadRoute } from '../hooks/useRoadRoute';
 import { rideAPI } from '../services/api';
-import toast from 'react-hot-toast';
+import { notifyError, notifySuccess } from '../utils/toastNotify';
 
 interface DriverLocation {
   latitude: number;
@@ -20,7 +20,7 @@ const RideTracking: React.FC = () => {
   const navigate = useNavigate();
   const [ride, setRide] = useState<any>(null);
   const prevStatusRef = useRef<string | null>(null);
-  const notifiedOtpRef = useRef(false);
+  const completedToastRef = useRef(false);
   const [driverLocation, setDriverLocation] = useState<DriverLocation | null>(null);
   const [driverPath, setDriverPath] = useState<Array<{ lat: number; lng: number }>>([]);
   const [loading, setLoading] = useState(true);
@@ -53,23 +53,23 @@ const RideTracking: React.FC = () => {
       setLoading(false);
 
       if (prevStatusRef.current === 'requested' && next.status === 'accepted') {
-        toast.success(`Driver accepted! ${next.driver_name || ''}`, { duration: 5000 });
-      }
-      if (next.status === 'accepted' && next.pickup_otp && !notifiedOtpRef.current) {
-        notifiedOtpRef.current = true;
-        toast.success(`Pickup OTP: ${next.pickup_otp}`, { duration: 8000 });
+        notifySuccess(
+          `Driver accepted!${next.pickup_otp ? ` Pickup OTP: ${next.pickup_otp}` : ''}`,
+          'ride-accepted'
+        );
       }
       if (prevStatusRef.current === 'accepted' && next.status === 'started') {
-        toast.success('Ride started!');
+        notifySuccess('Ride started!', 'ride-started');
       }
       prevStatusRef.current = next.status;
 
-      if (next.status === 'completed') {
-        toast.success('Ride completed!');
+      if (next.status === 'completed' && !completedToastRef.current) {
+        completedToastRef.current = true;
+        notifySuccess('Ride completed!', 'ride-completed');
         setTimeout(() => navigate(`/ride/${rideId}/complete`), 1200);
       }
     } catch {
-      toast.error('Failed to load ride');
+      notifyError('Failed to load ride', 'ride-load-error');
     }
   };
 

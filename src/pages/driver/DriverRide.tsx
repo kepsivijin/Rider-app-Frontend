@@ -7,7 +7,7 @@ import { useDriverLocationBroadcast } from '../../hooks/useDriverLocationBroadca
 import { useRoadRoute } from '../../hooks/useRoadRoute';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { api, rideAPI } from '../../services/api';
-import toast from 'react-hot-toast';
+import { notifyError, notifySuccess } from '../../utils/toastNotify';
 
 const DriverRide: React.FC = () => {
   const { rideId } = useParams<{ rideId: string }>();
@@ -18,8 +18,24 @@ const DriverRide: React.FC = () => {
   const [pickupOtpInput, setPickupOtpInput] = useState('');
   const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
+  const pickup = useMemo(
+    () => (ride ? { lat: ride.pickup_latitude, lng: ride.pickup_longitude } : null),
+    [ride]
+  );
+  const dropoff = useMemo(
+    () => (ride ? { lat: ride.dropoff_latitude, lng: ride.dropoff_longitude } : null),
+    [ride]
+  );
+
+  const { route: tripRoute, loading: tripLoading } = useRoadRoute(pickup, dropoff, !!pickup && !!dropoff);
+
   const isActive = ride?.status === 'accepted' || ride?.status === 'started';
-  const driverGeo = useDriverLocationBroadcast(rideId || null, isActive);
+  const driverGeo = useDriverLocationBroadcast(
+    rideId || null,
+    isActive,
+    tripRoute?.coordinates,
+    ride?.status
+  );
 
   const handleCustomerLocation = useCallback((data: any) => {
     setCustomerLocation({ latitude: data.latitude, longitude: data.longitude });
@@ -36,7 +52,7 @@ const DriverRide: React.FC = () => {
       const response = await api.get(`/rides/${rideId}`);
       setRide(response.data);
     } catch {
-      toast.error('Failed to load ride');
+      notifyError('Failed to load ride');
     } finally {
       setLoading(false);
     }
@@ -47,9 +63,9 @@ const DriverRide: React.FC = () => {
     try {
       const response = await api.post(`/rides/${rideId}/accept`);
       setRide(response.data);
-      toast.success('Accepted! Ask customer for OTP 987653');
+      notifySuccess('Accepted! OTP: 987653', 'accept-ride');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to accept');
+      notifyError(error.response?.data?.detail || 'Failed to accept');
     } finally {
       setActionLoading(false);
     }
@@ -57,17 +73,17 @@ const DriverRide: React.FC = () => {
 
   const verifyPickupOtp = async () => {
     if (!pickupOtpInput.trim()) {
-      toast.error('Enter customer OTP');
+      notifyError('Enter customer OTP');
       return;
     }
     setActionLoading(true);
     try {
       const response = await rideAPI.verifyPickupOtp(rideId!, pickupOtpInput.trim());
       setRide(response.data);
-      toast.success('Customer verified!');
+      notifySuccess('Customer verified!', 'otp-verified');
       setPickupOtpInput('');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Invalid OTP');
+      notifyError(error.response?.data?.detail || 'Invalid OTP');
     } finally {
       setActionLoading(false);
     }
@@ -78,9 +94,9 @@ const DriverRide: React.FC = () => {
     try {
       const response = await api.post(`/rides/${rideId}/start`);
       setRide(response.data);
-      toast.success('Ride started!');
+      notifySuccess('Ride started!', 'ride-started');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to start');
+      notifyError(error.response?.data?.detail || 'Failed to start');
     } finally {
       setActionLoading(false);
     }
@@ -91,24 +107,13 @@ const DriverRide: React.FC = () => {
     try {
       const response = await api.post(`/rides/${rideId}/complete`);
       setRide(response.data);
-      toast.success('Ride completed!');
+      notifySuccess('Ride completed!', 'ride-completed');
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to complete');
+      notifyError(error.response?.data?.detail || 'Failed to complete');
     } finally {
       setActionLoading(false);
     }
   };
-
-  const pickup = useMemo(
-    () => (ride ? { lat: ride.pickup_latitude, lng: ride.pickup_longitude } : null),
-    [ride]
-  );
-  const dropoff = useMemo(
-    () => (ride ? { lat: ride.dropoff_latitude, lng: ride.dropoff_longitude } : null),
-    [ride]
-  );
-
-  const { route: tripRoute, loading: tripLoading } = useRoadRoute(pickup, dropoff, !!pickup && !!dropoff);
 
   const driverPos =
     driverGeo.latitude != null && driverGeo.longitude != null
@@ -163,9 +168,9 @@ const DriverRide: React.FC = () => {
           fitRoute
           followLive={isActive && !!driverPos}
         />
-        {isActive && driverPos && (
+        {isActive && (driverPos || driverGeo.simulating) && (
           <div className="absolute top-4 left-4 z-[1000] bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-            📡 Live · customer can see you
+            {driverGeo.simulating ? '🎬 Demo drive · customer sees you move' : '📡 Live · customer can see you'}
           </div>
         )}
         {customerLocation && isActive && (
