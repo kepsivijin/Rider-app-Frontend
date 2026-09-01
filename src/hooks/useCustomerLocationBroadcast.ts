@@ -2,22 +2,22 @@ import { useEffect } from 'react';
 import { useWatchGeolocation } from './useGeolocation';
 import { useWebSocket } from './useWebSocket';
 
-/** Broadcast driver GPS to customer during active ride. */
-export function useDriverLocationBroadcast(rideId: string | null, enabled: boolean) {
+/** Broadcast customer GPS to driver during active ride. */
+export function useCustomerLocationBroadcast(rideId: string | null, enabled: boolean) {
   const geo = useWatchGeolocation(enabled);
-  const { emitDriverLocation } = useWebSocket(rideId, undefined, undefined, 'driver');
+  const { emitCustomerLocation } = useWebSocket(rideId, undefined, undefined, 'customer');
 
   useEffect(() => {
     if (!enabled || !rideId || geo.latitude == null || geo.longitude == null) return;
 
-    emitDriverLocation(geo.latitude, geo.longitude);
+    emitCustomerLocation(geo.latitude, geo.longitude);
     const interval = setInterval(() => {
       if (geo.latitude != null && geo.longitude != null) {
-        emitDriverLocation(geo.latitude, geo.longitude);
+        emitCustomerLocation(geo.latitude, geo.longitude);
       }
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [enabled, rideId, geo.latitude, geo.longitude, emitDriverLocation]);
+  }, [enabled, rideId, geo.latitude, geo.longitude, emitCustomerLocation]);
 
   return geo;
 }

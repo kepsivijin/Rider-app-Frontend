@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Map, { MapClickEvent } from '../components/Map';
 import MapControls from '../components/MapControls';
@@ -8,6 +8,7 @@ import { useGeolocation } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
 import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER } from '../constants/serviceArea';
 import { canBookFare, estimateFareFromKm, fareDetailLine, haversineKm, VEHICLE_FARE } from '../constants/fare';
+import { useRoadRoute } from '../hooks/useRoadRoute';
 import { AddressResult, reverseGeocode } from '../utils/format';
 import toast from 'react-hot-toast';
 
@@ -166,6 +167,15 @@ const Home: React.FC = () => {
   const markers = [];
   if (pickup) markers.push({ ...pickup, label: 'A' });
   if (dropoff) markers.push({ ...dropoff, label: 'B' });
+
+  const { route: bookingRoute, loading: routeLoading } = useRoadRoute(pickup, dropoff, !!pickup && !!dropoff);
+
+  useEffect(() => {
+    if (bookingRoute && pickup && dropoff) {
+      setDistanceKm(bookingRoute.distanceKm);
+      setEstimatedFare(estimateFareFromKm(bookingRoute.distanceKm, vehicleType, passengerCount));
+    }
+  }, [bookingRoute, vehicleType, passengerCount, pickup, dropoff]);
 
   const mapCenter = pickup || dropoff || (geo.latitude && geo.longitude
     ? { lat: geo.latitude, lng: geo.longitude }
@@ -361,7 +371,11 @@ const Home: React.FC = () => {
                 {VEHICLE_FARE[vehicleType].label} · Cash · {fareDetailLine(vehicleType, passengerCount)}
               </p>
               <p className="text-3xl font-bold">₹{estimatedFare}</p>
-              <p className="text-sm text-gray-600 mt-1">{distanceKm.toFixed(1)} km</p>
+              <p className="text-sm text-gray-600 mt-1">
+                {distanceKm.toFixed(1)} km
+                {bookingRoute ? ` · ~${bookingRoute.durationMin} min on roads` : ''}
+                {routeLoading ? ' · finding route…' : ''}
+              </p>
               {!canBookFare(estimatedFare) && (
                 <p className="text-xs text-amber-700 mt-2">Minimum fare above ₹5 required</p>
               )}
@@ -385,6 +399,7 @@ const Home: React.FC = () => {
             center={mapCenter}
             markers={markers}
             onMapClick={handleMapClick}
+            roadRoute={bookingRoute?.coordinates}
             fitRoute={!!pickup && !!dropoff}
           />
           <MapControls

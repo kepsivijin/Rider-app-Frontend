@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Map from '../../components/Map';
 import GeolocationBanner from '../../components/GeolocationBanner';
+import RideLivePanel from '../../components/RideLivePanel';
 import { useDriverLocationBroadcast } from '../../hooks/useDriverLocationBroadcast';
+import { useRoadRoute } from '../../hooks/useRoadRoute';
+import { useWebSocket } from '../../hooks/useWebSocket';
 import { api, rideAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -13,9 +16,16 @@ const DriverRide: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [pickupOtpInput, setPickupOtpInput] = useState('');
+  const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const isActive = ride?.status === 'accepted' || ride?.status === 'started';
   const driverGeo = useDriverLocationBroadcast(rideId || null, isActive);
+
+  const handleCustomerLocation = useCallback((data: any) => {
+    setCustomerLocation({ latitude: data.latitude, longitude: data.longitude });
+  }, []);
+
+  useWebSocket(rideId || null, undefined, handleCustomerLocation, 'driver');
 
   useEffect(() => {
     if (rideId) loadRide();
@@ -89,6 +99,30 @@ const DriverRide: React.FC = () => {
     }
   };
 
+  const pickup = useMemo(
+    () => (ride ? { lat: ride.pickup_latitude, lng: ride.pickup_longitude } : null),
+    [ride]
+  );
+  const dropoff = useMemo(
+    () => (ride ? { lat: ride.dropoff_latitude, lng: ride.dropoff_longitude } : null),
+    [ride]
+  );
+
+  const { route: tripRoute, loading: tripLoading } = useRoadRoute(pickup, dropoff, !!pickup && !!dropoff);
+
+  const driverPos =
+    driverGeo.latitude != null && driverGeo.longitude != null
+      ? { lat: driverGeo.latitude, lng: driverGeo.longitude }
+      : null;
+
+  const navTarget = ride?.status === 'started' ? dropoff : ride?.status === 'accepted' ? pickup : null;
+
+  const { route: activeLeg, loading: legLoading } = useRoadRoute(
+    driverPos,
+    navTarget,
+    !!driverPos && !!navTarget && isActive
+  );
+
   if (loading || !ride) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -108,21 +142,35 @@ const DriverRide: React.FC = () => {
     { lat: ride.pickup_latitude, lng: ride.pickup_longitude, label: 'A' },
     { lat: ride.dropoff_latitude, lng: ride.dropoff_longitude, label: 'B' },
   ];
-  if (driverGeo.latitude != null && driverGeo.longitude != null) {
-    markers.push({ lat: driverGeo.latitude, lng: driverGeo.longitude, label: '🚗' });
+  if (driverPos) {
+    markers.push({ ...driverPos, label: '🚗' });
+  }
+  if (customerLocation && isActive) {
+    markers.push({ lat: customerLocation.latitude, lng: customerLocation.longitude, label: '👤' });
   }
 
-  const mapCenter = driverGeo.latitude != null && driverGeo.longitude != null
-    ? { lat: driverGeo.latitude, lng: driverGeo.longitude }
-    : { lat: ride.pickup_latitude, lng: ride.pickup_longitude };
+  const mapCenter = driverPos ?? pickup!;
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-white">
-      <div className="flex-1 relative min-h-[45vh] md:min-h-0">
-        <Map center={mapCenter} markers={markers} trackingMode fitRoute followLive={isActive} />
-        {isActive && driverGeo.latitude != null && (
+      <div className="flex-1 relative min-h-[50vh] md:min-h-0">
+        <Map
+          center={mapCenter}
+          markers={markers}
+          trackingMode
+          roadRoute={tripRoute?.coordinates}
+          activeLegRoute={activeLeg?.coordinates}
+          fitRoute
+          followLive={isActive && !!driverPos}
+        />
+        {isActive && driverPos && (
           <div className="absolute top-4 left-4 z-[1000] bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-            📡 Sharing your location with customer
+            📡 Live · customer can see you
+          </div>
+        )}
+        {customerLocation && isActive && (
+          <div className="absolute top-14 left-4 z-[1000] bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
+            👤 Customer location on map
           </div>
         )}
       </div>
@@ -139,6 +187,17 @@ const DriverRide: React.FC = () => {
           onRetry={() => window.location.reload()}
         />
 
+        {isActive && (
+          <RideLivePanel
+            status={ride.status}
+            etaMin={activeLeg?.durationMin ?? tripRoute?.durationMin ?? null}
+            distanceKm={activeLeg?.distanceKm ?? tripRoute?.distanceKm ?? ride.distance_km}
+            loading={tripLoading || legLoading}
+            driverLive={!!driverPos}
+            customerLive={!!customerLocation}
+          />
+        )}
+
         <div className="p-4 bg-gray-50 rounded-2xl space-y-3 text-sm">
           <div className="flex gap-2">
             <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold">A</span>
@@ -150,7 +209,8 @@ const DriverRide: React.FC = () => {
           </div>
           <p className="text-2xl font-bold">₹{Math.round(ride.estimated_fare)} <span className="text-sm font-normal text-gray-500">cash</span></p>
           <p className="text-sm text-gray-500">
-            {ride.distance_km?.toFixed(1)} km · {(ride.vehicle_type || 'auto').toUpperCase()}
+            {ride.distance_km?.toFixed(1)} km trip
+            {tripRoute ? ` · ~${tripRoute.durationMin} min on roads` : ''}
           </p>
           {ride.customer_name && <p className="text-gray-600">Customer: {ride.customer_name}</p>}
         </div>
