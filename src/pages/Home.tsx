@@ -2,18 +2,19 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Map, { MapClickEvent } from '../components/Map';
 import MapControls from '../components/MapControls';
+import MapSelectionBar from '../components/MapSelectionBar';
 import GeolocationBanner from '../components/GeolocationBanner';
 import LocationSearchField from '../components/LocationSearchField';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
-import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER } from '../constants/serviceArea';
+import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER, isInServiceArea } from '../constants/serviceArea';
 import { canBookFare, estimateFareFromKm, fareDetailLine, haversineKm, VEHICLE_FARE } from '../constants/fare';
 import { useRoadRoute } from '../hooks/useRoadRoute';
 import { AddressResult, reverseGeocode } from '../utils/format';
-import toast from 'react-hot-toast';
+import { notifyError, notifySuccess } from '../utils/toastNotify';
 
 type RideMode = 'now' | 'scheduled';
-type ActiveField = 'pickup' | 'dropoff' | null;
+type ActiveField = 'pickup' | 'dropoff';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -57,17 +58,24 @@ const Home: React.FC = () => {
   }, [vehicleType, passengerCount]);
 
   const applyCoords = async (lat: number, lng: number, field: ActiveField) => {
+    if (!isInServiceArea(lat, lng)) {
+      notifyError('Tap inside Ezhudesam service area');
+      return;
+    }
     if (field === 'pickup') {
       setPickup({ lat, lng });
       await setLocationAddress(lat, lng, setPickupAddress);
       setActiveField('dropoff');
-    } else if (field === 'dropoff') {
+    } else {
       setDropoff({ lat, lng });
       await setLocationAddress(lat, lng, setDropoffAddress);
       if (pickup) calculateFare(pickup, { lat, lng });
-      setActiveField(null);
       setFitRouteKey((k) => k + 1);
     }
+  };
+
+  const handleMarkerDrag = async (label: 'A' | 'B', lat: number, lng: number) => {
+    await applyCoords(lat, lng, label === 'A' ? 'pickup' : 'dropoff');
   };
 
   const selectSearchResult = (field: ActiveField, result: AddressResult) => {
@@ -79,13 +87,12 @@ const Home: React.FC = () => {
       setDropoff({ lat: result.lat, lng: result.lng });
       setDropoffAddress(result.address);
       if (pickup) calculateFare(pickup, { lat: result.lat, lng: result.lng });
-      setActiveField(null);
       setFitRouteKey((k) => k + 1);
     }
   };
 
   const handleMapClick = async (e: MapClickEvent) => {
-    if (!e.latLng || !activeField) return;
+    if (!e.latLng) return;
     await applyCoords(e.latLng.lat(), e.latLng.lng(), activeField);
   };
 
@@ -108,7 +115,7 @@ const Home: React.FC = () => {
     setPickupAddress(preset.pickup.address);
     setDropoffAddress(preset.dropoff.address);
     calculateFare(preset.pickup, preset.dropoff);
-    setActiveField(null);
+    setActiveField('dropoff');
     setFitRouteKey((k) => k + 1);
   };
 
@@ -119,17 +126,17 @@ const Home: React.FC = () => {
 
   const handleBookRide = async () => {
     if (!pickup || !dropoff) {
-      toast.error('Select pickup and dropoff on the map');
+      notifyError('Select pickup and dropoff on the map');
       return;
     }
     if (rideMode === 'scheduled' && (!scheduleDate || !scheduleTime)) {
-      toast.error('Choose date and time for scheduled ride');
+      notifyError('Choose date and time for scheduled ride');
       return;
     }
 
     const scheduledAt = getScheduledAt();
     if (scheduledAt && new Date(scheduledAt) <= new Date()) {
-      toast.error('Scheduled time must be in the future');
+      notifyError('Scheduled time must be in the future');
       return;
     }
 
@@ -151,14 +158,14 @@ const Home: React.FC = () => {
       const response = await rideAPI.requestRide(payload);
 
       if (scheduledAt && new Date(scheduledAt) > new Date()) {
-        toast.success(`Ride scheduled for ${new Date(scheduledAt).toLocaleString()}`);
+        notifySuccess(`Ride scheduled for ${new Date(scheduledAt).toLocaleString()}`);
         navigate('/rides');
       } else {
-        toast.success('Finding drivers…');
+        notifySuccess('Finding drivers…');
         navigate(`/ride/${response.data.id}`);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to book ride');
+      notifyError(error.response?.data?.detail || 'Failed to book ride');
     } finally {
       setLoading(false);
     }
@@ -204,6 +211,7 @@ const Home: React.FC = () => {
           <p className="text-sm text-gray-500 flex items-center gap-1 mb-1">
             <span>📍</span> {SERVICE_AREA_NAME}, Kanyakumari
           </p>
+          <p className="text-xs text-gray-400 mb-4">Puvar · Kolachel · Vilavankodu · zoom map to pick exact spot</p>
           <h2 className="text-3xl font-bold mb-6">Request a ride</h2>
 
           <GeolocationBanner
@@ -260,7 +268,7 @@ const Home: React.FC = () => {
             <div className="space-y-2">
               <LocationSearchField
                 value={pickupAddress}
-                placeholder="Search pickup — e.g. Poothurai"
+                placeholder="Search pickup — e.g. Ezhudesam"
                 active={activeField === 'pickup'}
                 icon={<span className="w-3 h-3 rounded-full bg-black flex-shrink-0 z-10" />}
                 onFocus={() => setActiveField('pickup')}
@@ -280,7 +288,7 @@ const Home: React.FC = () => {
               />
               <LocationSearchField
                 value={dropoffAddress}
-                placeholder="Search dropoff — e.g. Nithiravilai"
+                placeholder="Search dropoff — e.g. Puvar"
                 active={activeField === 'dropoff'}
                 icon={<span className="w-3 h-3 rounded-sm bg-black flex-shrink-0 z-10" />}
                 onFocus={() => setActiveField('dropoff')}
@@ -289,13 +297,6 @@ const Home: React.FC = () => {
               />
             </div>
           </div>
-
-          {activeField && (
-            <p className="text-xs text-primary font-medium mb-4">
-              Tap on the map to set {activeField === 'pickup' ? 'pickup' : 'dropoff'}
-              {resolvingAddress && ' · finding address…'}
-            </p>
-          )}
 
           {/* Vehicle */}
           <p className="text-xs font-medium text-gray-500 mb-2">Vehicle</p>
@@ -393,15 +394,26 @@ const Home: React.FC = () => {
         </aside>
 
         {/* Right panel — map */}
-        <div className="flex-1 relative min-h-[45vh] md:min-h-0 order-first md:order-last">
+        <div className="flex-1 relative min-h-[50vh] md:min-h-0 order-first md:order-last touch-none">
+          <div className="absolute top-4 left-4 right-16 z-[1000] pointer-events-none">
+            <div className="bg-black/80 text-white text-xs font-medium px-3 py-2 rounded-xl inline-block">
+              {activeField === 'pickup'
+                ? '👆 Tap map or drag A to set pickup'
+                : '👆 Tap map or drag B to set dropoff'}
+              {resolvingAddress && ' · finding address…'}
+            </div>
+          </div>
           <Map
             key={fitRouteKey}
             center={mapCenter}
             markers={markers}
             onMapClick={handleMapClick}
+            onMarkerDrag={handleMarkerDrag}
+            selectionMode
             roadRoute={bookingRoute?.coordinates}
             fitRoute={!!pickup && !!dropoff}
           />
+          <MapSelectionBar activeField={activeField} onSelectField={setActiveField} />
           <MapControls
             onMyLocation={useMyLocationForPickup}
             locating={geo.loading}

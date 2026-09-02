@@ -17,54 +17,58 @@ interface MapProps {
   center?: { lat: number; lng: number };
   markers?: Array<{ lat: number; lng: number; label?: string }>;
   onMapClick?: (e: MapClickEvent) => void;
+  onMarkerDrag?: (label: 'A' | 'B', lat: number, lng: number) => void;
+  selectionMode?: boolean;
   trackingMode?: boolean;
   driverPath?: Array<{ lat: number; lng: number }>;
-  /** Full trip route on roads (pickup → dropoff) */
   roadRoute?: LatLng[];
-  /** Current leg on roads (e.g. driver → pickup or driver → dropoff) */
   activeLegRoute?: LatLng[];
   fitRoute?: boolean;
   followLive?: boolean;
 }
 
+const MIN_ZOOM = 12;
+const MAX_ZOOM = 19;
+
 const pickupIcon = L.divIcon({
   className: '',
-  html: '<div style="background:#22c55e;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)">A</div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  html: '<div style="background:#22c55e;color:white;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,.4);cursor:grab">A</div>',
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
 });
 
 const dropoffIcon = L.divIcon({
   className: '',
-  html: '<div style="background:#111;color:white;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)">B</div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  html: '<div style="background:#111;color:white;width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,.4);cursor:grab">B</div>',
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
 });
 
 const driverIcon = L.divIcon({
   className: '',
-  html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))">🚗</div>',
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
+  html: '<div style="font-size:32px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))">🚗</div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 
 const customerIcon = L.divIcon({
   className: '',
-  html: '<div style="background:#3b82f6;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)">👤</div>',
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
+  html: '<div style="background:#3b82f6;color:white;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)">👤</div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
 });
 
 const placeIcon = L.divIcon({
   className: '',
-  html: '<div style="background:#0ea5e9;color:white;width:8px;height:8px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>',
-  iconSize: [8, 8],
-  iconAnchor: [4, 4],
+  html: '<div style="background:#0ea5e9;color:white;width:10px;height:10px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>',
+  iconSize: [10, 10],
+  iconAnchor: [5, 5],
 });
 
-function MapClickHandler({ onMapClick }: { onMapClick?: (e: MapClickEvent) => void }) {
+function MapClickHandler({ onMapClick, enabled }: { onMapClick?: (e: MapClickEvent) => void; enabled?: boolean }) {
   useMapEvents({
     click(e) {
+      if (!enabled) return;
       onMapClick?.({
         latLng: { lat: () => e.latlng.lat, lng: () => e.latlng.lng },
       });
@@ -86,20 +90,18 @@ function FitRouteBounds({
   useEffect(() => {
     if (!enabled) return;
     const pts: [number, number][] = [];
-
     roadRoute?.forEach((p) => pts.push([p.lat, p.lng]));
     markers?.forEach((m) => {
       if (m.label === 'A' || m.label === 'B' || m.label === '🚗' || m.label === '👤') {
         pts.push([m.lat, m.lng]);
       }
     });
-
     if (pts.length === 0) return;
     if (pts.length === 1) {
-      map.setView(pts[0], 14);
+      map.setView(pts[0], 16);
       return;
     }
-    map.fitBounds(L.latLngBounds(pts), { padding: [48, 48], maxZoom: 15 });
+    map.fitBounds(L.latLngBounds(pts), { padding: [48, 48], maxZoom: 17 });
   }, [markers, roadRoute, enabled, map]);
   return null;
 }
@@ -113,17 +115,17 @@ function FollowLiveCenter({ center, enabled }: { center?: { lat: number; lng: nu
   return null;
 }
 
-function LockServiceArea({ fitRoute }: { fitRoute?: boolean }) {
+function LockServiceArea({ selectionMode }: { selectionMode?: boolean }) {
   const map = useMap();
   useEffect(() => {
     const bounds = L.latLngBounds(SERVICE_AREA_BOUNDS);
-    map.setMaxBounds(bounds.pad(0.02));
-    map.options.minZoom = 11;
-    map.options.maxZoom = 16;
-    if (!fitRoute) {
-      map.fitBounds(bounds, { padding: [8, 8], maxZoom: 14 });
+    map.setMaxBounds(bounds.pad(0.05));
+    map.options.minZoom = MIN_ZOOM;
+    map.options.maxZoom = MAX_ZOOM;
+    if (!selectionMode) {
+      map.fitBounds(bounds, { padding: [12, 12], maxZoom: 15 });
     }
-  }, [map, fitRoute]);
+  }, [map, selectionMode]);
   return null;
 }
 
@@ -131,6 +133,8 @@ const LeafletMap: React.FC<MapProps> = ({
   center,
   markers = [],
   onMapClick,
+  onMarkerDrag,
+  selectionMode,
   trackingMode,
   driverPath = [],
   roadRoute,
@@ -160,26 +164,30 @@ const LeafletMap: React.FC<MapProps> = ({
     return undefined;
   };
 
+  const canDrag = (label?: string) =>
+    selectionMode && (label === 'A' || label === 'B');
+
   return (
     <MapContainer
       center={[mapCenter.lat, mapCenter.lng]}
-      zoom={13}
-      minZoom={11}
-      maxZoom={16}
+      zoom={14}
+      minZoom={MIN_ZOOM}
+      maxZoom={MAX_ZOOM}
       maxBounds={SERVICE_AREA_BOUNDS}
-      maxBoundsViscosity={1.0}
-      style={{ width: '100%', height: '100%' }}
+      maxBoundsViscosity={0.85}
+      style={{ width: '100%', height: '100%', cursor: selectionMode ? 'crosshair' : 'grab' }}
       scrollWheelZoom
       className="z-0"
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap · Kanyakumari'
+        attribution='&copy; OpenStreetMap · Ezhudesam'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
       />
-      <LockServiceArea fitRoute={fitRoute} />
+      <LockServiceArea selectionMode={selectionMode || trackingMode} />
       <Rectangle
         bounds={SERVICE_AREA_BOUNDS}
-        pathOptions={{ color: '#0ea5e9', weight: 2, fillColor: '#0ea5e9', fillOpacity: 0.06, dashArray: '6 4' }}
+        pathOptions={{ color: '#0ea5e9', weight: 2, fillColor: '#0ea5e9', fillOpacity: 0.05, dashArray: '6 4' }}
       />
       <FitRouteBounds markers={markers} roadRoute={roadRoute} enabled={fitRoute} />
       <FollowLiveCenter center={center} enabled={followLive} />
@@ -189,9 +197,8 @@ const LeafletMap: React.FC<MapProps> = ({
             <Popup>{loc.address}</Popup>
           </Marker>
         ))}
-      <MapClickHandler onMapClick={onMapClick} />
+      <MapClickHandler onMapClick={onMapClick} enabled={selectionMode || !!onMapClick} />
 
-      {/* Full trip on roads (muted) */}
       {tripLine.length >= 2 && (
         <Polyline
           positions={tripLine}
@@ -203,26 +210,35 @@ const LeafletMap: React.FC<MapProps> = ({
         />
       )}
 
-      {/* Active navigation leg on roads (highlighted) */}
       {legLine.length >= 2 && (
-        <Polyline
-          positions={legLine}
-          pathOptions={{ color: '#22c55e', weight: 7, opacity: 0.95 }}
-        />
+        <Polyline positions={legLine} pathOptions={{ color: '#22c55e', weight: 7, opacity: 0.95 }} />
       )}
 
-      {/* Trail of where driver has been */}
       {driverLine.length >= 2 && (
         <Polyline positions={driverLine} pathOptions={{ color: '#f59e0b', weight: 4, opacity: 0.85, dashArray: '4 6' }} />
       )}
 
       {markers.map((marker, index) => (
-        <Marker key={`${marker.lat}-${marker.lng}-${index}`} position={[marker.lat, marker.lng]} icon={iconFor(marker.label)}>
-          {marker.label && marker.label !== '🚗' && marker.label !== '👤' && (
-            <Popup>{marker.label === 'A' ? 'Pickup' : marker.label === 'B' ? 'Dropoff' : marker.label}</Popup>
-          )}
-          {marker.label === '🚗' && <Popup>Driver</Popup>}
-          {marker.label === '👤' && <Popup>Customer</Popup>}
+        <Marker
+          key={`${marker.label}-${marker.lat}-${marker.lng}-${index}`}
+          position={[marker.lat, marker.lng]}
+          icon={iconFor(marker.label)}
+          draggable={canDrag(marker.label)}
+          eventHandlers={
+            canDrag(marker.label) && onMarkerDrag
+              ? {
+                  dragend: (e) => {
+                    const { lat, lng } = e.target.getLatLng();
+                    onMarkerDrag(marker.label as 'A' | 'B', lat, lng);
+                  },
+                }
+              : undefined
+          }
+        >
+          {marker.label === 'A' && <Popup>Pickup — drag to move</Popup>}
+          {marker.label === 'B' && <Popup>Dropoff — drag to move</Popup>}
+          {marker.label === '🚗' && <Popup>Driver (live)</Popup>}
+          {marker.label === '👤' && <Popup>Customer (live)</Popup>}
         </Marker>
       ))}
     </MapContainer>

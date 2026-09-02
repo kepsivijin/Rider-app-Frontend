@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { notifyError, notifySuccess } from '../../utils/toastNotify';
 
-const DEFAULT_LOCATION = { latitude: 8.2875, longitude: 77.105 }; // Eramanthurai
+const DEFAULT_LOCATION = { latitude: 8.385, longitude: 77.055 }; // Ezhudesam
 
 const DriverDashboard: React.FC = () => {
   const navigate = useNavigate();

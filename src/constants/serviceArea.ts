@@ -1,59 +1,59 @@
 /**
- * Service area: Eramanthurai, Vallavilai, Nithiravilai & Marthandam surroundings
- * Kanyakumari district (Kollemcode / Vilavancode region)
+ * Service area: Ezhudesam & surroundings (Puvar, Kolachel, Vilavankodu)
+ * Kanyakumari district — coastal TN/Kerala border
  */
 
-export const SERVICE_AREA_NAME = 'Marthandam Region';
+export const SERVICE_AREA_NAME = 'Ezhudesam';
 
-// Center of coastal Kollemcode / Vilavancode strip (Kuzhithurai–Pudukadai area)
-export const SERVICE_AREA_CENTER = { lat: 8.285, lng: 77.155 };
+// Center on Ezhudesam village
+export const SERVICE_AREA_CENTER = { lat: 8.385, lng: 77.055 };
 
-// Leaflet bounds: [[south, west], [north, east]] — matches service map box
+// Leaflet bounds: [[south, west], [north, east]]
 export const SERVICE_AREA_BOUNDS: [[number, number], [number, number]] = [
-  [8.24, 77.1],
-  [8.33, 77.24],
+  [8.31, 76.96],
+  [8.42, 77.18],
 ];
 
 export const SERVICE_LOCATIONS = {
-  eramanthurai: { lat: 8.2875, lng: 77.105, address: 'Eramanthurai' },
-  marthandanthurai: { lat: 8.2875, lng: 77.105, address: 'Marthandanthurai' },
-  vallavilai: { lat: 8.2815, lng: 77.1143, address: 'Vallavilai' },
-  nithiravilai: { lat: 8.2739, lng: 77.1436, address: 'Nithiravilai' },
-  marthandam: { lat: 8.3076, lng: 77.2218, address: 'Marthandam' },
-  kollancode: { lat: 8.289, lng: 77.108, address: 'Kollancode' },
+  ezhudesam: { lat: 8.385, lng: 77.055, address: 'Ezhudesam' },
+  puvar: { lat: 8.372, lng: 77.098, address: 'Puvar' },
+  kolachel: { lat: 8.345, lng: 77.008, address: 'Kolachel' },
+  vilavankodu: { lat: 8.358, lng: 77.118, address: 'Vilavankodu' },
+  unnamalaikadai: { lat: 8.362, lng: 77.148, address: 'Unnamalaikadai' },
+  eraviputhanthurai: { lat: 8.378, lng: 77.032, address: 'Eraviputhanthurai' },
+  thoothoor: { lat: 8.261, lng: 77.1431, address: 'Thoothoor' },
   poothurai: { lat: 8.264, lng: 77.138, address: 'Poothurai (Pottur)' },
-  thoothoorChurch: { lat: 8.261, lng: 77.1431, address: 'St Thomas Forane Church, Thoothoor' },
 };
 
 export const ROUTE_PRESETS = [
   {
-    name: 'Poothurai → Nithiravilai',
-    pickup: SERVICE_LOCATIONS.poothurai,
-    dropoff: SERVICE_LOCATIONS.nithiravilai,
+    name: 'Ezhudesam → Puvar',
+    pickup: SERVICE_LOCATIONS.ezhudesam,
+    dropoff: SERVICE_LOCATIONS.puvar,
   },
   {
-    name: 'Poothurai → Thoothoor Church',
-    pickup: SERVICE_LOCATIONS.poothurai,
-    dropoff: SERVICE_LOCATIONS.thoothoorChurch,
+    name: 'Ezhudesam → Kolachel',
+    pickup: SERVICE_LOCATIONS.ezhudesam,
+    dropoff: SERVICE_LOCATIONS.kolachel,
   },
   {
-    name: 'Eramanthurai → Vallavilai',
-    pickup: SERVICE_LOCATIONS.eramanthurai,
-    dropoff: SERVICE_LOCATIONS.vallavilai,
+    name: 'Puvar → Vilavankodu',
+    pickup: SERVICE_LOCATIONS.puvar,
+    dropoff: SERVICE_LOCATIONS.vilavankodu,
   },
   {
-    name: 'Vallavilai → Nithiravilai',
-    pickup: SERVICE_LOCATIONS.vallavilai,
-    dropoff: SERVICE_LOCATIONS.nithiravilai,
+    name: 'Kolachel → Ezhudesam',
+    pickup: SERVICE_LOCATIONS.kolachel,
+    dropoff: SERVICE_LOCATIONS.ezhudesam,
   },
   {
-    name: 'Nithiravilai → Marthandam',
-    pickup: SERVICE_LOCATIONS.nithiravilai,
-    dropoff: SERVICE_LOCATIONS.marthandam,
-  },
-  {
-    name: 'Eramanthurai → Marthandam',
-    pickup: SERVICE_LOCATIONS.eramanthurai,
-    dropoff: SERVICE_LOCATIONS.marthandam,
+    name: 'Ezhudesam → Unnamalaikadai',
+    pickup: SERVICE_LOCATIONS.ezhudesam,
+    dropoff: SERVICE_LOCATIONS.unnamalaikadai,
   },
 ];
+
+export function isInServiceArea(lat: number, lng: number): boolean {
+  const [[south, west], [north, east]] = SERVICE_AREA_BOUNDS;
+  return lat >= south && lat <= north && lng >= west && lng <= east;
+}
