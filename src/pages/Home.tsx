@@ -5,7 +5,7 @@ import MapControls from '../components/MapControls';
 import MapSelectionBar from '../components/MapSelectionBar';
 import GeolocationBanner from '../components/GeolocationBanner';
 import LocationSearchField from '../components/LocationSearchField';
-import { useGeolocation } from '../hooks/useGeolocation';
+import { useGeolocation, requestCurrentPosition } from '../hooks/useGeolocation';
 import { rideAPI } from '../services/api';
 import { ROUTE_PRESETS, SERVICE_AREA_NAME, SERVICE_AREA_CENTER, isInServiceArea } from '../constants/serviceArea';
 import { canBookFare, estimateFareFromKm, fareDetailLine, haversineKm, VEHICLE_FARE } from '../constants/fare';
@@ -32,6 +32,7 @@ const Home: React.FC = () => {
   const [vehicleType, setVehicleType] = useState<'bike' | 'auto' | 'car'>('auto');
   const [passengerCount, setPassengerCount] = useState(3);
   const [loading, setLoading] = useState(false);
+  const [locatingPickup, setLocatingPickup] = useState(false);
   const [resolvingAddress, setResolvingAddress] = useState(false);
   const [fitRouteKey, setFitRouteKey] = useState(0);
 
@@ -59,7 +60,7 @@ const Home: React.FC = () => {
 
   const applyCoords = async (lat: number, lng: number, field: ActiveField) => {
     if (!isInServiceArea(lat, lng)) {
-      notifyError('Tap inside Ezhudesam service area');
+      notifyError('Tap inside service area (Kolachel–Poovar & Marthandam–Chirayankeezhu)');
       return;
     }
     if (field === 'pickup') {
@@ -97,16 +98,24 @@ const Home: React.FC = () => {
   };
 
   const useMyLocationForPickup = async () => {
-    geo.retry();
-    if (geo.latitude != null && geo.longitude != null) {
-      await applyCoords(geo.latitude, geo.longitude, 'pickup');
-      return;
-    }
-    setTimeout(async () => {
-      if (geo.latitude != null && geo.longitude != null) {
-        await applyCoords(geo.latitude, geo.longitude, 'pickup');
+    setActiveField('pickup');
+    setLocatingPickup(true);
+    try {
+      const position = await requestCurrentPosition();
+      const { latitude, longitude } = position.coords;
+      await applyCoords(latitude, longitude, 'pickup');
+      notifySuccess('Pickup set to your current location');
+    } catch (error: any) {
+      geo.retry();
+      const code = error?.code ?? geo.errorCode;
+      if (code === 1) {
+        notifyError('Allow location access in browser settings, or tap the map to pick pickup');
+      } else {
+        notifyError(geo.error || 'Could not get your location. Tap the map to pick pickup.');
       }
-    }, 1500);
+    } finally {
+      setLocatingPickup(false);
+    }
   };
 
   const applyPreset = (preset: (typeof ROUTE_PRESETS)[0]) => {
@@ -211,7 +220,9 @@ const Home: React.FC = () => {
           <p className="text-sm text-gray-500 flex items-center gap-1 mb-1">
             <span>📍</span> {SERVICE_AREA_NAME}, Kanyakumari
           </p>
-          <p className="text-xs text-gray-400 mb-4">Puvar · Kolachel · Vilavankodu · zoom map to pick exact spot</p>
+          <p className="text-xs text-gray-400 mb-4">
+            Kolachel · Poovar · Marthandam · Chirayankeezhu — tap map or use 📍 My location
+          </p>
           <h2 className="text-3xl font-bold mb-6">Request a ride</h2>
 
           <GeolocationBanner
@@ -268,7 +279,7 @@ const Home: React.FC = () => {
             <div className="space-y-2">
               <LocationSearchField
                 value={pickupAddress}
-                placeholder="Search pickup — e.g. Ezhudesam"
+                placeholder="Search pickup — e.g. Kolachel, Marthandam"
                 active={activeField === 'pickup'}
                 icon={<span className="w-3 h-3 rounded-full bg-black flex-shrink-0 z-10" />}
                 onFocus={() => setActiveField('pickup')}
@@ -278,17 +289,17 @@ const Home: React.FC = () => {
                   <button
                     type="button"
                     onClick={useMyLocationForPickup}
-                    disabled={geo.loading}
+                    disabled={locatingPickup || geo.loading}
                     title="Use current location"
                     className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
                   >
-                    {geo.loading ? '…' : '🎯'}
+                    {locatingPickup || geo.loading ? '…' : '📍'}
                   </button>
                 }
               />
               <LocationSearchField
                 value={dropoffAddress}
-                placeholder="Search dropoff — e.g. Puvar"
+                placeholder="Search dropoff — e.g. Poovar, Chirayankeezhu"
                 active={activeField === 'dropoff'}
                 icon={<span className="w-3 h-3 rounded-sm bg-black flex-shrink-0 z-10" />}
                 onFocus={() => setActiveField('dropoff')}
@@ -394,7 +405,7 @@ const Home: React.FC = () => {
         </aside>
 
         {/* Right panel — map */}
-        <div className="flex-1 relative min-h-[50vh] md:min-h-0 order-first md:order-last touch-none">
+        <div className="flex-1 relative min-h-[50vh] md:min-h-0 order-first md:order-last">
           <div className="absolute top-4 left-4 right-16 z-[1000] pointer-events-none">
             <div className="bg-black/80 text-white text-xs font-medium px-3 py-2 rounded-xl inline-block">
               {activeField === 'pickup'
@@ -404,7 +415,6 @@ const Home: React.FC = () => {
             </div>
           </div>
           <Map
-            key={fitRouteKey}
             center={mapCenter}
             markers={markers}
             onMapClick={handleMapClick}
@@ -412,11 +422,17 @@ const Home: React.FC = () => {
             selectionMode
             roadRoute={bookingRoute?.coordinates}
             fitRoute={!!pickup && !!dropoff}
+            fitRouteTrigger={fitRouteKey}
           />
-          <MapSelectionBar activeField={activeField} onSelectField={setActiveField} />
+          <MapSelectionBar
+            activeField={activeField}
+            onSelectField={setActiveField}
+            onUseMyLocation={useMyLocationForPickup}
+            locating={locatingPickup}
+          />
           <MapControls
             onMyLocation={useMyLocationForPickup}
-            locating={geo.loading}
+            locating={locatingPickup || geo.loading}
             showFitRoute={!!pickup && !!dropoff}
             onFitRoute={() => setFitRouteKey((k) => k + 1)}
           />

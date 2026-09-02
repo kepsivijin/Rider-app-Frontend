@@ -41,8 +41,14 @@ const DriverRide: React.FC = () => {
   const emitRef = React.useRef(emitDriverLocation);
   emitRef.current = emitDriverLocation;
 
-  // Demo: animate driver along road route (pickup → dropoff) for testing
+  const hasRealGps = driverGeo.latitude != null && driverGeo.longitude != null;
+
+  // Demo simulation only when GPS unavailable (local dev); production uses real GPS
   useEffect(() => {
+    if (import.meta.env.PROD || hasRealGps) {
+      setSimPos(null);
+      return;
+    }
     if (!isActive || !tripRoute?.coordinates?.length || !ride?.status) {
       setSimPos(null);
       return;
@@ -62,7 +68,7 @@ const DriverRide: React.FC = () => {
     tick();
     const timer = window.setInterval(tick, 1200);
     return () => window.clearInterval(timer);
-  }, [isActive, tripRoute, ride?.status]);
+  }, [isActive, tripRoute, ride?.status, hasRealGps]);
 
   useEffect(() => {
     if (rideId) loadRide();
@@ -82,11 +88,24 @@ const DriverRide: React.FC = () => {
   const acceptRide = async () => {
     setActionLoading(true);
     try {
-      const response = await api.post(`/rides/${rideId}/accept`);
+      const response = await api.post(`/rides/${rideId}/accept`, {}, { timeout: 15000 });
       setRide(response.data);
       notifySuccess('Accepted! OTP: 987653', 'accept-ride');
     } catch (error: any) {
       notifyError(error.response?.data?.detail || 'Failed to accept');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const rejectRide = async () => {
+    setActionLoading(true);
+    try {
+      await api.post(`/rides/${rideId}/reject`, {}, { timeout: 15000 });
+      notifySuccess('Ride declined', 'reject-ride');
+      navigate('/driver');
+    } catch (error: any) {
+      notifyError(error.response?.data?.detail || 'Failed to reject');
     } finally {
       setActionLoading(false);
     }
@@ -137,10 +156,9 @@ const DriverRide: React.FC = () => {
   };
 
   const driverPos =
-    simPos ??
-    (driverGeo.latitude != null && driverGeo.longitude != null
-      ? { lat: driverGeo.latitude, lng: driverGeo.longitude }
-      : null);
+    hasRealGps
+      ? { lat: driverGeo.latitude!, lng: driverGeo.longitude! }
+      : simPos;
 
   const navTarget = ride?.status === 'started' ? dropoff : ride?.status === 'accepted' ? pickup : null;
 
@@ -190,9 +208,15 @@ const DriverRide: React.FC = () => {
           fitRoute
           followLive={isActive && !!driverPos}
         />
-        {isActive && simPos && (
+        {isActive && simPos && !hasRealGps && (
           <div className="absolute top-4 left-4 z-[1000] bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-            🎬 Demo drive · moving to {ride.status === 'started' ? 'dropoff' : 'pickup'}
+            🎬 Demo drive · allow GPS for real live tracking
+          </div>
+        )}
+        {isActive && hasRealGps && (
+          <div className="absolute top-4 left-4 z-[1000] bg-green-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow flex items-center gap-2">
+            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            Live GPS tracking
           </div>
         )}
         {customerLocation && isActive && (
@@ -243,10 +267,24 @@ const DriverRide: React.FC = () => {
         </div>
 
         {ride.status === 'requested' && (
-          <button type="button" onClick={acceptRide} disabled={actionLoading}
-            className="w-full bg-green-600 text-white py-4 rounded-xl font-bold disabled:opacity-50">
-            {actionLoading ? 'Accepting…' : 'Accept Ride'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={rejectRide}
+              disabled={actionLoading}
+              className="flex-1 border-2 border-red-400 text-red-600 py-4 rounded-xl font-bold hover:bg-red-50 disabled:opacity-50"
+            >
+              {actionLoading ? '…' : 'Reject'}
+            </button>
+            <button
+              type="button"
+              onClick={acceptRide}
+              disabled={actionLoading}
+              className="flex-1 bg-green-600 text-white py-4 rounded-xl font-bold disabled:opacity-50"
+            >
+              {actionLoading ? 'Accepting…' : 'Accept Ride'}
+            </button>
+          </div>
         )}
 
         {ride.status === 'accepted' && !ride.pickup_verified && (

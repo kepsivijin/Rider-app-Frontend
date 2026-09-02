@@ -11,6 +11,23 @@ interface GeolocationState {
   permission: GeoPermission;
 }
 
+const GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 20000,
+  maximumAge: 0,
+};
+
+/** One-shot GPS request — use for "current location" pickup. */
+export function requestCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(Object.assign(new Error('Geolocation not supported'), { code: 0 }));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, GEO_OPTIONS);
+  });
+}
+
 function friendlyGeoError(code: number): string {
   switch (code) {
     case 1:

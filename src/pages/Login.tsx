@@ -254,7 +254,7 @@ const Login: React.FC = () => {
             </button>
           </form>
         )}
-        <p className="text-center text-gray-400 text-xs mt-6">App v1.1.0 · Marthandam region</p>
+        <p className="text-center text-gray-400 text-xs mt-6">App v1.2.0 · Kanyakumari South Coast</p>
       </div>
     </div>
   );

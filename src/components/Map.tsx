@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polyline, Rectangle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polyline, Rectangle, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -24,11 +24,13 @@ interface MapProps {
   roadRoute?: LatLng[];
   activeLegRoute?: LatLng[];
   fitRoute?: boolean;
+  fitRouteTrigger?: number;
   followLive?: boolean;
 }
 
-const MIN_ZOOM = 12;
+const MIN_ZOOM = 11;
 const MAX_ZOOM = 19;
+const SELECTION_ZOOM = 13;
 
 const pickupIcon = L.divIcon({
   className: '',
@@ -81,10 +83,12 @@ function FitRouteBounds({
   markers,
   roadRoute,
   enabled,
+  trigger,
 }: {
   markers: MapProps['markers'];
   roadRoute?: LatLng[];
   enabled?: boolean;
+  trigger?: number;
 }) {
   const map = useMap();
   useEffect(() => {
@@ -102,7 +106,7 @@ function FitRouteBounds({
       return;
     }
     map.fitBounds(L.latLngBounds(pts), { padding: [48, 48], maxZoom: 17 });
-  }, [markers, roadRoute, enabled, map]);
+  }, [markers, roadRoute, enabled, trigger, map]);
   return null;
 }
 
@@ -115,17 +119,19 @@ function FollowLiveCenter({ center, enabled }: { center?: { lat: number; lng: nu
   return null;
 }
 
-function LockServiceArea({ selectionMode }: { selectionMode?: boolean }) {
+function LockServiceArea({ selectionMode, trackingMode }: { selectionMode?: boolean; trackingMode?: boolean }) {
   const map = useMap();
   useEffect(() => {
     const bounds = L.latLngBounds(SERVICE_AREA_BOUNDS);
-    map.setMaxBounds(bounds.pad(0.05));
+    map.setMaxBounds(bounds.pad(0.08));
     map.options.minZoom = MIN_ZOOM;
     map.options.maxZoom = MAX_ZOOM;
-    if (!selectionMode) {
+    if (selectionMode && !trackingMode) {
+      map.setView([SERVICE_AREA_CENTER.lat, SERVICE_AREA_CENTER.lng], SELECTION_ZOOM, { animate: false });
+    } else if (!selectionMode) {
       map.fitBounds(bounds, { padding: [12, 12], maxZoom: 15 });
     }
-  }, [map, selectionMode]);
+  }, [map, selectionMode, trackingMode]);
   return null;
 }
 
@@ -140,6 +146,7 @@ const LeafletMap: React.FC<MapProps> = ({
   roadRoute,
   activeLegRoute,
   fitRoute,
+  fitRouteTrigger,
   followLive,
 }) => {
   const mapCenter = center || SERVICE_AREA_CENTER;
@@ -170,26 +177,29 @@ const LeafletMap: React.FC<MapProps> = ({
   return (
     <MapContainer
       center={[mapCenter.lat, mapCenter.lng]}
-      zoom={14}
+      zoom={selectionMode ? SELECTION_ZOOM : 14}
       minZoom={MIN_ZOOM}
       maxZoom={MAX_ZOOM}
       maxBounds={SERVICE_AREA_BOUNDS}
       maxBoundsViscosity={0.85}
-      style={{ width: '100%', height: '100%', cursor: selectionMode ? 'crosshair' : 'grab' }}
+      style={{ width: '100%', height: '100%', cursor: selectionMode ? 'crosshair' : 'grab', touchAction: 'manipulation' }}
       scrollWheelZoom
+      zoomControl={false}
       className="z-0"
     >
+      <ZoomControl position="bottomright" />
       <TileLayer
-        attribution='&copy; OpenStreetMap · Ezhudesam'
+        attribution='&copy; OpenStreetMap · Kanyakumari'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
+        maxZoom={MAX_ZOOM}
+        maxNativeZoom={19}
       />
-      <LockServiceArea selectionMode={selectionMode || trackingMode} />
+      <LockServiceArea selectionMode={selectionMode} trackingMode={trackingMode} />
       <Rectangle
         bounds={SERVICE_AREA_BOUNDS}
         pathOptions={{ color: '#0ea5e9', weight: 2, fillColor: '#0ea5e9', fillOpacity: 0.05, dashArray: '6 4' }}
       />
-      <FitRouteBounds markers={markers} roadRoute={roadRoute} enabled={fitRoute} />
+      <FitRouteBounds markers={markers} roadRoute={roadRoute} enabled={fitRoute} trigger={fitRouteTrigger} />
       <FollowLiveCenter center={center} enabled={followLive} />
       {!trackingMode &&
         areaMarkers.map((loc) => (
@@ -197,7 +207,7 @@ const LeafletMap: React.FC<MapProps> = ({
             <Popup>{loc.address}</Popup>
           </Marker>
         ))}
-      <MapClickHandler onMapClick={onMapClick} enabled={selectionMode || !!onMapClick} />
+      <MapClickHandler onMapClick={onMapClick} enabled={!!selectionMode && !!onMapClick} />
 
       {tripLine.length >= 2 && (
         <Polyline

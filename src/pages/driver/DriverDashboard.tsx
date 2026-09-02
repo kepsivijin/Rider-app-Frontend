@@ -14,6 +14,7 @@ const DriverDashboard: React.FC = () => {
   const [activeRide, setActiveRide] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [noProfile, setNoProfile] = useState(false);
+  const [actionRideId, setActionRideId] = useState<string | null>(null);
 
   const loadDriverProfile = useCallback(async () => {
     try {
@@ -87,6 +88,32 @@ const DriverDashboard: React.FC = () => {
     }
   };
 
+  const acceptRide = async (rideId: string) => {
+    setActionRideId(rideId);
+    try {
+      await api.post(`/rides/${rideId}/accept`, {}, { timeout: 15000 });
+      notifySuccess('Ride accepted!', `accept-${rideId}`);
+      navigate(`/driver/ride/${rideId}`);
+    } catch (error: any) {
+      notifyError(error.response?.data?.detail || error.message || 'Failed to accept ride');
+    } finally {
+      setActionRideId(null);
+    }
+  };
+
+  const rejectRide = async (rideId: string) => {
+    setActionRideId(rideId);
+    try {
+      await api.post(`/rides/${rideId}/reject`, {}, { timeout: 15000 });
+      setPendingRides((prev) => prev.filter((r) => r.id !== rideId));
+      notifySuccess('Ride declined', `reject-${rideId}`);
+    } catch (error: any) {
+      notifyError(error.response?.data?.detail || error.message || 'Failed to reject ride');
+    } finally {
+      setActionRideId(null);
+    }
+  };
+
   const toggleOnline = async () => {
     try {
       const goingOnline = !isOnline;
@@ -157,7 +184,7 @@ const DriverDashboard: React.FC = () => {
             <div>
               <h2 className="text-2xl font-bold">{isOnline ? 'You are Online' : 'You are Offline'}</h2>
               <p className="text-gray-600">
-                {isOnline ? 'Ready to accept rides in Marthandam region' : 'Go online to receive ride requests'}
+                {isOnline ? 'Ready to accept rides in Kanyakumari region' : 'Go online to receive ride requests'}
               </p>
             </div>
             <button
@@ -211,11 +238,30 @@ const DriverDashboard: React.FC = () => {
                       <p className="text-xs text-gray-500">{ride.distance_km?.toFixed(1)} km</p>
                     </div>
                   </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => rejectRide(ride.id)}
+                      disabled={actionRideId === ride.id}
+                      className="flex-1 bg-white border-2 border-red-300 text-red-600 py-2.5 rounded-lg font-semibold hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {actionRideId === ride.id ? '…' : 'Reject'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => acceptRide(ride.id)}
+                      disabled={actionRideId === ride.id}
+                      className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {actionRideId === ride.id ? '…' : 'Accept'}
+                    </button>
+                  </div>
                   <button
+                    type="button"
                     onClick={() => navigate(`/driver/ride/${ride.id}`)}
-                    className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600"
+                    className="w-full mt-2 text-sm text-gray-600 hover:text-black py-1"
                   >
-                    View & Accept
+                    View details on map →
                   </button>
                 </div>
               ))}

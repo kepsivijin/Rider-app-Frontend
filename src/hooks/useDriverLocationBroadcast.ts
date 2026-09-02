@@ -15,7 +15,7 @@ export function useDriverLocationBroadcast(rideId: string | null, enabled: boole
       if (geo.latitude != null && geo.longitude != null) {
         emitDriverLocation(geo.latitude, geo.longitude);
       }
-    }, 8000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [enabled, rideId, geo.latitude, geo.longitude, emitDriverLocation]);
 

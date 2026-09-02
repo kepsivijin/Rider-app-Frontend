@@ -28,7 +28,7 @@ export const useWebSocket = (
 
     const socket = io(WS_URL, {
       transports: ['websocket', 'polling'],
-      path: '/ws/socket.io/',
+      path: '/socket.io/',
     });
     socketRef.current = socket;
 

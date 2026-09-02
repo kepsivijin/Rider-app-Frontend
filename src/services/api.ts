@@ -46,6 +46,8 @@ export const rideAPI = {
     api.get('/rides/nearby-drivers', { params: { latitude, longitude } }),
   getRide: (rideId: string) => api.get(`/rides/${rideId}`),
   getMyRides: () => api.get('/rides/my-rides'),
+  acceptRide: (rideId: string) => api.post(`/rides/${rideId}/accept`),
+  rejectRide: (rideId: string) => api.post(`/rides/${rideId}/reject`),
   cancelRide: (rideId: string) => api.post(`/rides/${rideId}/cancel`),
   verifyPickupOtp: (rideId: string, pickup_otp: string) =>
     api.post(`/rides/${rideId}/verify-pickup`, { pickup_otp }),

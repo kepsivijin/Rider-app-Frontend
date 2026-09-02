@@ -48,8 +48,8 @@ export const useRideTracking = (
     if (!rideId || options?.enabled === false) return;
 
     const socket = io(WS_URL, {
-      transports: ['websocket'],
-      path: '/ws/socket.io/',
+      transports: ['websocket', 'polling'],
+      path: '/socket.io/',
     });
     socketRef.current = socket;
 
